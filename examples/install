@@ -2,7 +2,7 @@
 
 # configuration start
 
-source -- "$(dirname -- "$0")/install.configuration"
+source -- "$(dirname -- "$0")/packages.configuration"
 
 # configuration end
 
@@ -66,7 +66,11 @@ function __set_script_path() {
 
 __set_script_path "$script_path_level" || exit 1
 
-bootstrap_file="$installation_root/bootstrap_install"
+mkdir --parents -- "packages"
+touch -- "packages/FLAG_IS_PROJECT"
+cp -- "installation/packages.sources" "packages/packages.sources"
+
+bootstrap_file="installation/bootstrap_install"
 
 if $update && [[ -f "$bootstrap_file" ]]; then
 	rm -rf -- "$bootstrap_file" || exit 1

@@ -301,10 +301,14 @@ function record_library() {
 		printf '# version="%s"\n' "$requirement_branch" >> "$dynamic_partial"
 	fi
 
-	printf '__%s_library_path="%s/"\n' "$requirement_project" "${target_library_path%/}" >> "$dynamic_partial"
+	printf '__%s_library_path="%s"\n' "$requirement_project" "$(__normalize_path_slashes "$target_library_path/")" >> "$dynamic_partial"
 }
 
 function record_pin() {
+	if grep -q -- "^# name=$requirement_project$" "$pinned_partial"; then
+		return 0
+	fi
+
 	printf '# name=%s\n# type=url\n' "$requirement_project" >> "$pinned_partial"
 	[[ "$entry_installation_root" != "$installation_root" ]] && printf '# installation_root=%s\n' "$entry_installation_root" >> "$pinned_partial"
 	[[ "$entry_installation_path" != "library" ]] && printf '# installation_path=%s\n' "$entry_installation_path" >> "$pinned_partial"

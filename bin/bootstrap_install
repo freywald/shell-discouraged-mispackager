@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# please do NOT modify this file
+# this script is 1:1 taken from ex10dead-project
+# and will be replaced on manual update at any time
+
 # preamble
 set -o errtrace -o pipefail -o noclobber -o nounset
 shopt -s inherit_errexit nullglob dotglob
@@ -107,9 +111,9 @@ function bootstrap_install() {
 	fi
 
 	project_name="${project_name//"-"/"_"}"
-	destination="$(__normalize_path_slashes "$destination/$project_name")"
+	destination="$(__normalize_path_slashes "$destination/$project_name/")"
 
-	printf -v "__${project_name}_library_path" '%s/' "$destination"
+	printf -v "__${project_name}_library_path" '%s' "$destination"
 
 	if [[ -d "$destination" ]]; then
 		__info "Bootstrapping %s not necessary… skipped." "$project_name"

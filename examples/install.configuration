@@ -2,16 +2,21 @@
 
 # configuration start
 
-bootstrap_file_sha256="1b7762c2b42e3c59bd89291e79581a3479498a4e5330ddc370296ff8f926937a"
+bootstrap_file_sha256="84a133876e304b0eb8e9df6f4d8165654d86f77f88b4963e4d69e7beecd01587"
 ex10dead_common_library_sha256="3e3ee27d59b5f44d69543dca06d99278293f71501e5fc14905f98ad73f5eb3f7"
-ex10dead_project_sha256="7b947196ce3ebfbcc7a29eaa95d1d4156f1738a9e94798030f26a53e4316b3cb"
+ex10dead_project_sha256="2ab439609ae805fe6d8faf64cec3f612a70e22eec63f660e95c7c9110c0f7510"
 
-bootstrap_file_url="https://github.com/freywald/ex10dead-project/blob/ba22ac42af062307ee59642107219581b53c8266/bin/bootstrap_install"
-ex10dead_common_library_url="https://github.com/freywald/ex10dead-common-library/tree/deeb2b515981d5b997a8172f644c2775ca38a1d5"
-ex10dead_project_url="https://github.com/freywald/ex10dead-project/tree/ba22ac42af062307ee59642107219581b53c8266"
+bootstrap_file_url="https://raw.githubusercontent.com/freywald/ex10dead-project/41d72ac0eed5b6bf7a6ade0f6e11c349451c35a9/bin/bootstrap_install"
+#bootstrap_file_url=""
+
+ex10dead_common_library_url="https://github.com/freywald/ex10dead-common-library"
+#ex10dead_common_library_url="https://github.com/freywald/ex10dead-common-library/tree/deeb2b515981d5b997a8172f644c2775ca38a1d5"
+
+ex10dead_project_url="https://github.com/freywald/ex10dead-project"
+#ex10dead_project_url="https://github.com/freywald/ex10dead-project/tree/41d72ac0eed5b6bf7a6ade0f6e11c349451c35a9"
 
 script_path_level=0
 
-installation_root="examples/packages/"
+installation_root="packages/"
 
 # configuration end
