@@ -672,10 +672,23 @@ function process_requirement() {
 
 		if [[ -n "${installed_paths["$project"]-}" ]] && ! $force_download_newer; then
 			target_library_path="${installed_paths["$project"]}"
-			target_library_path="$(__normalize_path_slashes "$target_library_path")"
+			target_library_path="$(__normalize_path_slashes "$target_library_path/")"
 
 			if [[ -d "$target_library_path/" ]]; then
 				__info "already installed at %s, skipping %s" "$target_library_path" "$project"
+
+				# Source handler if present (same logic as the main path)
+				local handlers_directory handler
+				handlers_directory="$(dirname -- "$file")/$CONTROL_DIRECTORY"
+				handler="$handlers_directory/$project"
+				if [[ ! -f "$handler" ]]; then
+					handler="$target_library_path/$CONTROL_DIRECTORY/$project"
+				fi
+				if [[ -f "$handler" ]]; then
+					__info "sourcing post-installation handler %s" "$handler"
+					__require_once "$handler"
+					handler_sourced["$project"]=1
+				fi
 
 				record_pin
 				record_library
