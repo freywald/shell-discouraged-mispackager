@@ -663,6 +663,10 @@ function process_requirement() {
 		if [[ ! -f "$handler" && -n "${installed_paths["$project"]-}" ]]; then
 			handler="${installed_paths["$project"]}/$CONTROL_DIRECTORY/$project"
 		fi
+		# Fresh install: installed_paths is not set yet — look inside the directory we just extracted
+		if [[ ! -f "$handler" && -n "$target_library_path" ]]; then
+			handler="$target_library_path/$CONTROL_DIRECTORY/$project"
+		fi
 
 		if [[ -f "$handler" ]]; then
 			__info "sourcing post-installation handler %s" "$handler"
@@ -676,19 +680,6 @@ function process_requirement() {
 
 			if [[ -d "$target_library_path/" ]]; then
 				__info "already installed at %s, skipping %s" "$target_library_path" "$project"
-
-				# Source handler if present (same logic as the main path)
-				local handlers_directory handler
-				handlers_directory="$(dirname -- "$file")/$CONTROL_DIRECTORY"
-				handler="$handlers_directory/$project"
-				if [[ ! -f "$handler" ]]; then
-					handler="$target_library_path/$CONTROL_DIRECTORY/$project"
-				fi
-				if [[ -f "$handler" ]]; then
-					__info "sourcing post-installation handler %s" "$handler"
-					__require_once "$handler"
-					handler_sourced["$project"]=1
-				fi
 
 				record_pin
 				record_library
