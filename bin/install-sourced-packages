@@ -958,6 +958,35 @@ function install_package() {
 		done
 	fi
 
+	# Detect the same project installed in more than one place
+	declare -A project_locations=()
+	while IFS= read -r -d '' dir; do
+		local name
+		name="$(basename -- "$dir")"
+
+		if [[ -f "$dir/$CONTROL_DIRECTORY/$name" ]]; then
+			:
+		elif [[ -f "$dir/installation-settings.markdown" ]]; then
+			name="$(settings_value "$dir/installation-settings.markdown" "project")"
+			[[ -z "$name" ]] && name="$(basename -- "$dir")"
+		else
+			continue
+		fi
+
+		if [[ -n "${project_locations["$name"]-}" ]]; then
+			__error "duplicate install of %s: %s and %s" "$name" "${project_locations["$name"]}" "$dir"
+			local_exit_failsafe
+		fi
+		project_locations["$name"]="$(__normalize_path_slashes "$dir")"
+	done < <(find "$installation_root" -mindepth 2 -maxdepth 2 -type d -print0)
+
+	for name in "${!project_locations[@]}"; do
+		if [[ -z "${installed_paths["$name"]-}" ]]; then
+			installed_paths["$name"]="${project_locations["$name"]}"
+		fi
+	done
+	unset project_locations
+
 	local rebooted=false
 	if $force_download_newer; then
 		local project path
