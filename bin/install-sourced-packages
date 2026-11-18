@@ -603,7 +603,7 @@ function process_requirement() {
 			local_exit_failsafe
 		fi
 
-		[[ -n "$name" ]] && pinned_commits["$name"]="$commit"
+		[[ -n "$name" && -n "$commit" ]] && pinned_commits["$name"]="$commit"
 		[[ -n "$name" ]] && pinned_urls["$name"]="$value"
 
 		__info "Requirement: %s" "$value"
@@ -936,6 +936,20 @@ function install_package() {
 		__info "no pin file; using %s" "$input_file"
 	fi
 
+	# Even with --update, remember the commits recorded in the pin file
+	if [[ -f "$pinned_file" && -s "$pinned_file" ]]; then
+		local pin_name="" pin_commit=""
+		while IFS= read -r line || [[ -n "$line" ]]; do
+			if [[ "$line" =~ ^#\ name=([A-Za-z0-9_]+)$ ]]; then
+				pin_name="${BASH_REMATCH[1]}"
+				pin_commit=""
+			elif [[ "$line" =~ ^#\ commit=([0-9a-fA-F]+)$ ]]; then
+				pin_commit="${BASH_REMATCH[1]}"
+				[[ -n "$pin_name" ]] && pinned_commits["$pin_name"]="$pin_commit"
+			fi
+		done < "$pinned_file"
+	fi
+
 	local runtime_file="$installation_root/bootstrapped.dynamic"
 	if [[ -f "$runtime_file" ]]; then
 		__require_once "$runtime_file"
@@ -1107,7 +1121,7 @@ EOF
 	else
 		rm -f -- "$pinned_partial"
 	fi
-	
+
 	if [[ -f "$dynamic_file" ]]; then
 		source -- "$dynamic_file"
 	fi
