@@ -301,7 +301,10 @@ function record_library() {
 		printf '# version="%s"\n' "$requirement_branch" >> "$dynamic_partial"
 	fi
 
-	printf '__%s_library_path="%s"\n' "$requirement_project" "$(__normalize_path_slashes "$target_library_path/")" >> "$dynamic_partial"
+	local rel="${target_library_path#"$installation_root"/}"
+	rel="${rel#"$installation_root"}"
+	rel="${rel#/}"
+	printf '__%s_library_path="$installation_root/%s"\n' "$requirement_project" "$(__normalize_path_slashes "$rel/")" >> "$dynamic_partial"
 }
 
 function record_pin() {
@@ -663,10 +666,6 @@ function process_requirement() {
 		if [[ ! -f "$handler" && -n "${installed_paths["$project"]-}" ]]; then
 			handler="${installed_paths["$project"]}/$CONTROL_DIRECTORY/$project"
 		fi
-		# Fresh install: installed_paths is not set yet — look inside the directory we just extracted
-		if [[ ! -f "$handler" && -n "$target_library_path" ]]; then
-			handler="$target_library_path/$CONTROL_DIRECTORY/$project"
-		fi
 
 		if [[ -f "$handler" ]]; then
 			__info "sourcing post-installation handler %s" "$handler"
@@ -808,12 +807,14 @@ function process_requirement() {
 		if [[ ! -f "$handler" && -n "${installed_paths["$project"]-}" ]]; then
 			handler="${installed_paths["$project"]}/$CONTROL_DIRECTORY/$project"
 		fi
+		if [[ ! -f "$handler" && -n "$target_library_path" ]]; then
+			handler="$target_library_path/$CONTROL_DIRECTORY/$project"
+		fi
 		if [[ -f "$handler" ]]; then
 			__info "sourcing post-installation handler %s" "$handler"
 			__require_once "$handler"
 			handler_sourced["$project"]=1
 		fi
-
 		installation_complete=true
 		installation_target=""
 
