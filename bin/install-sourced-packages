@@ -293,6 +293,8 @@ function record_library() {
 		return 0
 	fi
 
+	[[ -n "$requirement_commit" ]] && printf '# commit=%s\n' "$requirement_commit" >> "$dynamic_partial"
+
 	if [[ -n "$requirement_version" ]]; then
 		printf '# version="%s"\n' "$requirement_version" >> "$dynamic_partial"
 	elif [[ -n "$requirement_tag" ]]; then

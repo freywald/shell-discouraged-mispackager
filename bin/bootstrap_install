@@ -35,6 +35,11 @@ if ! declare -p registered_handlers &>"/dev/null"; then
 	declare -A registered_handlers=()
 fi
 
+if [[ -z "${installation_root:-}" ]]; then
+	__error "installation_root is empty or not set"
+	local_exit_failsafe
+fi
+
 function bootstrap_install() {
 	local url="$1" destination="$2"
 	shift 2 ||:
@@ -172,7 +177,7 @@ EOF
 
 	installed_paths["$project_name"]="$destination"
 
-	local runtime_file="${installation_root:-"Build/libraries"}/bootstrapped.dynamic"
+	local runtime_file="$installation_root/bootstrapped.dynamic"
 	mkdir --parents -- "$(dirname -- "$runtime_file")"
 	local rel="${destination#"$installation_root"/}"
 	rel="${rel#"$installation_root"}"
