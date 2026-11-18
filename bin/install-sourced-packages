@@ -7,7 +7,7 @@
 
 function local_exit_failsafe() { __exit_failsafe; exit 1; }
 
-# script task start
+# task start
 
 if ! declare -p installation_root &>"/dev/null"; then
 	installation_root=""
@@ -183,6 +183,7 @@ function resolve_download() {
 	latest_tag=""
 
 	if [[ "$requirement_kind" == "zip" ]]; then
+		__verbose "using direct zip for %s: %s" "$requirement_project" "$requirement_download"
 		return 0
 	fi
 
@@ -192,16 +193,19 @@ function resolve_download() {
 		local full
 		full="$(git ls-remote "$requirement_page.git" "$requirement_commit" 2>"/dev/null" | awk '{print $1; exit}')"
 		[[ -n "$full" ]] && requirement_commit="$full"
+		__verbose "using pinned commit for %s: %s" "$requirement_project" "$requirement_commit"
 		return 0
 	fi
 
 	if $force_download_newer || [[ -z "$requirement_tag" && -z "$requirement_branch" ]]; then
 		latest_tag="$(latest_release_tag "$requirement_owner" "$requirement_repository")"
+		__verbose "queried latest release for %s: %s" "$requirement_project" "${latest_tag:-"(none)"}"
 	fi
 
 	if [[ -n "$requirement_tag" ]]; then
 		requirement_download="$requirement_page/archive/refs/tags/$requirement_tag.zip"
 		requirement_version="$(version_from_text "$requirement_tag")"
+		__verbose "using explicit tag for %s: %s" "$requirement_project" "$requirement_tag"
 
 		return 0
 	fi
@@ -209,6 +213,7 @@ function resolve_download() {
 	if [[ -n "$requirement_branch" ]]; then
 		requirement_download="$requirement_page/archive/refs/heads/$requirement_branch.zip"
 		requirement_commit="$(branch_commit "$requirement_page" "$requirement_branch")"
+		__verbose "using branch for %s: %s (%s)" "$requirement_project" "$requirement_branch" "${requirement_commit:-"(no commit)"}"
 
 		return 0
 	fi
@@ -217,6 +222,7 @@ function resolve_download() {
 		requirement_tag="$latest_tag"
 		requirement_download="$requirement_page/archive/refs/tags/$requirement_tag.zip"
 		requirement_version="$(version_from_text "$requirement_tag")"
+		__info "selected latest release %s for %s" "$latest_tag" "$requirement_project"
 
 		return 0
 	fi
@@ -224,6 +230,7 @@ function resolve_download() {
 	requirement_branch="$branch_primary"
 	requirement_download="$requirement_page/archive/refs/heads/$requirement_branch.zip"
 	requirement_commit="$(branch_commit "$requirement_page" "$requirement_branch")"
+	__info "falling back to primary branch %s for %s" "$branch_primary" "$requirement_project"
 }
 
 function notify_newer() {
@@ -284,21 +291,29 @@ function same_install() {
 		installed_tag="$(settings_value "$target_library_path/installation-settings.markdown" "tag")"
 		installed_version="$(settings_value "$target_library_path/installation-settings.markdown" "version")"
 		if [[ -n "$requirement_tag" && "$installed_tag" == "$requirement_tag" ]]; then
+			__verbose "same install: tag %s matches for %s" "$requirement_tag" "$requirement_project"
 			return 0
 		fi
 		if [[ -n "$requirement_version" && "$installed_version" == "$requirement_version" ]]; then
+			__verbose "same install: version %s matches for %s" "$requirement_version" "$requirement_project"
 			return 0
 		fi
 	fi
 
 	if [[ -n "$requirement_commit" ]]; then
-		[[ -n "$installed_commit" && "$installed_commit" == "$requirement_commit" ]]
-		return $?
+		if [[ -n "$installed_commit" && "$installed_commit" == "$requirement_commit" ]]; then
+			__verbose "same install: commit %s matches for %s" "$requirement_commit" "$requirement_project"
+			return 0
+		fi
+		return 1
 	fi
 
 	local installed_url="${pinned_urls["$requirement_project"]-}"
-	[[ "$installed_url" == "$requirement_download" ]]
-	return $?
+	if [[ "$installed_url" == "$requirement_download" ]]; then
+		__verbose "same install: download URL matches for %s" "$requirement_project"
+		return 0
+	fi
+	return 1
 }
 
 function record_library() {
@@ -320,6 +335,7 @@ function record_library() {
 	rel="${rel#"$installation_root"}"
 	rel="${rel#/}"
 	printf '__%s_library_path="$installation_root/%s"\n' "$requirement_project" "$(__normalize_path_slashes "$rel/")" >> "$dynamic_partial"
+	__verbose "recorded library path for %s" "$requirement_project"
 }
 
 function record_pin() {
@@ -333,6 +349,7 @@ function record_pin() {
 	[[ -n "$requirement_commit" ]] && printf '# commit=%s\n' "$requirement_commit" >> "$pinned_partial"
 	[[ -n "${requirement_sha256:-}" ]] && printf '# sha256=%s\n' "$requirement_sha256" >> "$pinned_partial"
 	printf '%s\n\n' "$requirement_download" >> "$pinned_partial"
+	__verbose "recorded pin for %s" "$requirement_project"
 }
 
 function record_pin_check() {
@@ -522,6 +539,7 @@ function enqueue_nested() {
 
 	[[ -z "$nested" ]] && return 0
 
+	__verbose "enqueueing nested requirements from %s (depth %s)" "$library_path" "$depth"
 	queue+=("$nested"$'\t'"$depth"$'\t'"$(basename -- "$library_path")")
 }
 
@@ -746,8 +764,6 @@ function process_requirement() {
 			local_exit_failsafe
 		fi
 
-__info "DEBUG %s: target=%s exists=%s req_commit=%s pin_commit=%s" "$project" "$target_library_path" "$([[ -d "$target_library_path" ]] && echo yes || echo no)" "${requirement_commit:-"(empty)"}" "${pinned_commits["$project"]:-"(empty)"}"
-
 		if ! $force_installation_all && same_install; then
 			__info "already installed, skipping %s" "$project"
 			record_library
@@ -761,6 +777,7 @@ __info "DEBUG %s: target=%s exists=%s req_commit=%s pin_commit=%s" "$project" "$
 		fi
 
 		if [[ -d "$target_library_path" ]]; then
+			__info "backing up previous install of %s" "$project"
 			backup_installation_directory "$target_library_path" "$project"
 		fi
 
@@ -774,6 +791,7 @@ __info "DEBUG %s: target=%s exists=%s req_commit=%s pin_commit=%s" "$project" "$
 		installation_zip="$zip_temporary"
 
 		local status=0
+		__info "downloading %s" "$project"
 		curl -fL --retry 3 --retry-delay 2 -o "$zip_temporary" -- "$requirement_download" || status="$(__abort_on_interrupt "$?")"
 		if (( status != 0 )); then
 			[[ -f "$zip_temporary" ]] && rm -f -- "$zip_temporary"
@@ -802,6 +820,7 @@ __info "DEBUG %s: target=%s exists=%s req_commit=%s pin_commit=%s" "$project" "$
 			__info "sha256 verified for %s" "$requirement_project"
 		fi
 
+		__info "extracting %s to %s" "$project" "$target_library_path"
 		if ! extract_zip "$zip_temporary" "$target_library_path"; then
 			archive_zip "$zip_temporary" "${project}-failed"
 			installation_zip=""
@@ -841,6 +860,7 @@ __info "DEBUG %s: target=%s exists=%s req_commit=%s pin_commit=%s" "$project" "$
 		installation_complete=true
 		installation_target=""
 
+		__info "installed %s to %s" "$project" "$target_library_path"
 		record_library
 		seen["$project"]="installed"
 
@@ -973,7 +993,7 @@ function install_package() {
 
 	local runtime_file="$installation_root/bootstrapped.dynamic"
 	if [[ -f "$runtime_file" ]]; then
-		__require_once "$runtime_file"
+		source -- "$runtime_file"
 		local variable project
 		for variable in ${!__*}; do
 			[[ "$variable" != *"_library_path" ]] && continue
@@ -984,7 +1004,7 @@ function install_package() {
 	fi
 
 	if [[ -f "$dynamic_file" ]]; then
-		__require_once "$dynamic_file"
+		source -- "$dynamic_file"
 		for variable in ${!__*}; do
 			[[ "$variable" != *"_library_path" ]] && continue
 			project="${variable#"__"}"
@@ -1251,4 +1271,3 @@ EOF
 
 	__info "[%s] done." "__$__current_script_name"
 }
-

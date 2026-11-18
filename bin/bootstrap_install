@@ -4,7 +4,7 @@
 # this script is 1:1 taken from ex10dead-project
 # and will be replaced on manual update at any time
 
-# preamble
+# preamble start
 set -o errtrace -o pipefail -o noclobber -o nounset
 shopt -s inherit_errexit nullglob dotglob
 
@@ -19,9 +19,11 @@ readonly DYNAMIC_FILE="package-summary.dynamic"
 readonly SOURCES_FILE="packages.sources"
 readonly PINNED_FILE="packages.pinned.sources"
 
-readonly BOOTSTRAPPER_LOADED=true
-
 function local_exit_failsafe() { exit 1; }
+
+# preamble end
+
+readonly BOOTSTRAPPER_LOADED=true
 
 if ! declare -p installed_paths &>"/dev/null"; then
 	declare -A installed_paths=()
@@ -115,9 +117,12 @@ function bootstrap_install() {
 
 	printf -v "__${project_name}_library_path" '%s/' "$destination"
 
+	__verbose "resolved bootstrap for %s → %s" "$project_name" "$download_url"
+
 	if [[ -d "$destination" ]]; then
 		__info "Bootstrapping %s not necessary… skipped." "$project_name"
 	else
+		__info "bootstrapping %s from %s" "$project_name" "$download_url"
 		temporary_directory="$(__create_temporary_directory)"
 		local status=0
 		curl -fL --retry 3 --retry-delay 2 --output "$temporary_directory/archive.zip" -- "$download_url" || status="$(__abort_on_interrupt "$?")"
@@ -141,6 +146,7 @@ function bootstrap_install() {
 			__info "sha256 verified for %s" "$project_name"
 		fi
 
+		__info "extracting %s" "$project_name"
 		status=0
 		unzip -q -d "$temporary_directory/extracted" -- "$temporary_directory/archive.zip" || status="$(__abort_on_interrupt "$?")"
 		if (( status != 0 )); then
@@ -169,6 +175,7 @@ function bootstrap_install() {
 EOF
 
 		[[ -d "$temporary_directory" ]] && rm --recursive --force -- "$temporary_directory"
+		__info "bootstrapped %s to %s" "$project_name" "$destination"
 	fi
 
 	installed_paths["$project_name"]="$destination"
@@ -182,6 +189,7 @@ EOF
 	line="$(printf '__%s_library_path="$installation_root/%s"\n' "$project_name" "$(__normalize_path_slashes "$rel/")")"
 	if [[ ! -f "$runtime_file" ]] || ! grep -qF -- "$line" "$runtime_file"; then
 		printf '%s\n' "$line" >> "$runtime_file"
+		__verbose "recorded library path for %s" "$project_name"
 	fi
 
 	local handler
