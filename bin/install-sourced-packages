@@ -181,6 +181,26 @@ function branch_commit() {
 	printf '%s\n' "$commit_hash"
 }
 
+function update_pin_commit() {
+	local name="$1" new_commit="$2"
+	[[ ! -f "$pinned_file" || ! -s "$pinned_file" ]] && return 0
+
+	local temporary
+	temporary="$(__create_temporary_file)"
+	local current="" line
+	while IFS= read -r line || [[ -n "$line" ]]; do
+		if [[ "$line" =~ ^#\ name=([A-Za-z0-9_]+)$ ]]; then
+			current="${BASH_REMATCH[1]}"
+			printf '%s\n' "$line" >> "$temporary"
+		elif [[ "$current" == "$name" && "$line" =~ ^#\ commit= ]]; then
+			printf '# commit=%s\n' "$new_commit" >> "$temporary"
+		else
+			printf '%s\n' "$line" >> "$temporary"
+		fi
+	done < "$pinned_file"
+	mv -f -- "$temporary" "$pinned_file"
+}
+
 function resolve_download() {
 	local saved_commit="$requirement_commit"
 	requirement_commit=""
@@ -1220,6 +1240,9 @@ function install_package() {
 					printf -- '- %s: %s\n' "$k" "${keep[$k]}"
 				done
 			} >| "$path/installation-settings.markdown"
+
+			update_pin_commit "$project" "$commit"
+			pinned_commits["$project"]="$commit"
 
 			rebooted=true
 		done
