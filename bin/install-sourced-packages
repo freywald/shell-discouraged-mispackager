@@ -198,7 +198,7 @@ function resolve_download() {
 		full="$(git ls-remote "$requirement_page.git" "$requirement_commit" 2>"/dev/null" | awk '{print $1; exit}')" || status="$(__abort_on_interrupt "$?")"
 		if (( status != 0 )); then
 			__error "failed to resolve commit %s for %s" "$requirement_commit" "$requirement_project"
-			return 1
+			local_exit_failsafe
 		fi
 		[[ -n "$full" ]] && requirement_commit="$full"
 		__verbose "using pinned commit for %s: %s" "$requirement_project" "$requirement_commit"
@@ -222,7 +222,7 @@ function resolve_download() {
 		requirement_download="$requirement_page/archive/refs/heads/$requirement_branch.zip"
 		if ! requirement_commit="$(branch_commit "$requirement_page" "$requirement_branch")"; then
 			__error "failed to resolve branch %s for %s" "$requirement_branch" "$requirement_project"
-			return 1
+			local_exit_failsafe
 		fi
 		__verbose "using branch for %s: %s (%s)" "$requirement_project" "$requirement_branch" "$requirement_commit"
 
@@ -242,7 +242,7 @@ function resolve_download() {
 	requirement_download="$requirement_page/archive/refs/heads/$requirement_branch.zip"
 	if ! requirement_commit="$(branch_commit "$requirement_page" "$requirement_branch")"; then
 		__error "failed to resolve primary branch %s for %s" "$branch_primary" "$requirement_project"
-		return 1
+		local_exit_failsafe
 	fi
 	__info "falling back to primary branch %s for %s" "$branch_primary" "$requirement_project"
 }
@@ -1135,23 +1135,8 @@ function install_package() {
 			local settings="$path/installation-settings.markdown"
 			[[ ! -f "$settings" ]] && continue
 
-			local installed_tag installed_branch installed_version installed_url
-			installed_tag="$(settings_value "$settings" "tag")"
-			installed_branch="$(settings_value "$settings" "branch")"
-			installed_version="$(settings_value "$settings" "version")"
-			installed_url="$(settings_value "$settings" "download url")"
-
-			# Leave tagged and explicit-version installs alone unless --update-pinned is set
-			if ! $update_pinned; then
-				[[ -n "$installed_tag" || -n "$installed_version" ]] && continue
-			fi
-
-			# Eligible only if it looks like a primary-branch (or branch) install
-			if [[ -z "$installed_branch" ]]; then
-				[[ "$installed_url" != *"/heads/${branch_primary}.zip"* ]] && continue
-				installed_branch="$branch_primary"
-			fi
-			[[ "$installed_branch" != "$branch_primary" ]] && continue
+			# Only packages installed by the bootstrapper
+			[[ "$(settings_value "$settings" "bootstrapped")" != "true" ]] && continue
 
 			local installed_commit=""
 			[[ -f "$settings" ]] && installed_commit="$(settings_value "$settings" "commit")"
