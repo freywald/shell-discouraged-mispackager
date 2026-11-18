@@ -734,12 +734,21 @@ function process_requirement() {
 			handler_sourced["$project"]=1
 		fi
 
-		if [[ -n "${installed_paths["$project"]-}" ]] && ! $force_download_newer; then
+		local is_bootstrapped=false
+		if [[ -n "${installed_paths["$project"]-}" ]]; then
+			[[ "$(settings_value "${installed_paths["$project"]}/installation-settings.markdown" "bootstrapped")" == "true" ]] && is_bootstrapped=true
+		fi
+
+		if [[ -n "${installed_paths["$project"]-}" ]] && { ! $force_download_newer || $is_bootstrapped; }; then
 			target_library_path="${installed_paths["$project"]}"
 			target_library_path="$(__normalize_path_slashes "$target_library_path/")"
 
 			if [[ -d "$target_library_path/" ]]; then
-				__info "already installed at %s, skipping %s" "$target_library_path" "$project"
+				if $is_bootstrapped && $force_download_newer; then
+					__info "bootstrapped package %s is managed by core update, skipping" "$project"
+				else
+					__info "already installed at %s, skipping %s" "$target_library_path" "$project"
+				fi
 
 				record_pin
 				record_library
