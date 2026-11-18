@@ -1167,8 +1167,9 @@ function install_package() {
 			# Only packages installed by the bootstrapper
 			[[ "$(settings_value "$settings" "bootstrapped")" != "true" ]] && continue
 
-			local installed_commit=""
-			[[ -f "$settings" ]] && installed_commit="$(settings_value "$settings" "commit")"
+			# Pin is the preference; settings is only human-readable
+			local installed_commit="${pinned_commits["$project"]-}"
+			[[ -z "$installed_commit" ]] && installed_commit="$(settings_value "$settings" "commit")"
 
 			local page commit
 			page="$(settings_value "$settings" "source url")"
@@ -1177,6 +1178,16 @@ function install_package() {
 			local status=0
 			commit="$(git ls-remote "$page.git" "refs/heads/master" 2>"/dev/null" | awk '{print $1; exit}')" || status="$(__abort_on_interrupt "$?")"
 			if (( status != 0 )) || [[ -z "$commit" || "$commit" == "$installed_commit" ]]; then
+				continue
+			fi
+
+			# Settings already has this commit: only bring the pin forward
+			local settings_commit
+			settings_commit="$(settings_value "$settings" "commit")"
+			if [[ "$settings_commit" == "$commit" ]]; then
+				__info "pin for %s is behind settings, updating pin to %s" "$project" "$commit"
+				update_pin_commit "$project" "$commit"
+				pinned_commits["$project"]="$commit"
 				continue
 			fi
 
