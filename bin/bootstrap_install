@@ -182,7 +182,11 @@ EOF
 	local rel="${destination#"$installation_root"/}"
 	rel="${rel#"$installation_root"}"
 	rel="${rel#/}"
-	printf '__%s_library_path="$installation_root/%s"\n' "$project_name" "$(__normalize_path_slashes "$rel/")" >> "$runtime_file"
+	local line
+	line="$(printf '__%s_library_path="$installation_root/%s"\n' "$project_name" "$(__normalize_path_slashes "$rel/")")"
+	if [[ ! -f "$runtime_file" ]] || ! grep -qF -- "$line" "$runtime_file"; then
+		printf '%s\n' "$line" >> "$runtime_file"
+	fi
 
 	local handler
 	handler="$(__normalize_path_slashes "$destination/$CONTROL_DIRECTORY/$project_name")"
