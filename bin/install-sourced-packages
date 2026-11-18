@@ -1232,6 +1232,7 @@ function install_package() {
 
 	if $rebooted; then
 		__info "bootstrapped libraries updated, reboot required"
+		force_download_newer=false
 		return "$EXIT_REBOOT"
 	fi
 
