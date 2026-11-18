@@ -1107,6 +1107,10 @@ EOF
 	else
 		rm -f -- "$pinned_partial"
 	fi
+	
+	if [[ -f "$dynamic_file" ]]; then
+		source -- "$dynamic_file"
+	fi
 
 	trap - "INT" "TERM"
 
