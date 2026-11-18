@@ -121,6 +121,17 @@ function bootstrap_install() {
 
 	if [[ -d "$destination" ]]; then
 		__info "Bootstrapping %s not necessary… skipped." "$project_name"
+		# Ensure the marker exists even if settings were deleted
+		if [[ ! -f "$destination/installation-settings.markdown" ]] || \
+		   ! grep -q '^- bootstrapped:' "$destination/installation-settings.markdown"; then
+			{
+				printf '%s\n' "# installation settings" ""
+				printf '%s\n' "- source url: ${url}"
+				printf '%s\n' "- download url: ${download_url}"
+				printf '%s\n' "- bootstrapped: true"
+				printf '%s\n' "- installed at: $(date +%d-%m-%Y-%H-%M-%S)"
+			} >> "$destination/installation-settings.markdown"
+		fi
 	else
 		__info "bootstrapping %s from %s" "$project_name" "$download_url"
 		temporary_directory="$(__create_temporary_directory)"
@@ -198,7 +209,7 @@ EOF
 		__info "sourcing post-installation handler %s" "$handler"
 		if [[ "$(type -t "__require_once")" != "function" ]]; then
 			if ! source -- "$handler"; then
-				echo "(fallback) handler file failed to source: %s" "$handler"
+				__error "(fallback) handler file failed to source: %s" "$handler"
 				local_exit_failsafe
 			fi
 		else

@@ -18,6 +18,7 @@ force_installation_all=false
 force_download_newer=false
 update_to_any_depth=false
 update_pinned=false
+backup_destination=""
 
 readonly EXIT_REBOOT=12
 
@@ -172,8 +173,11 @@ except Exception:
 }
 
 function branch_commit() {
-	local page="$1" branch="$2" commit_hash
-	commit_hash="$(git ls-remote "$page.git" "refs/heads/$branch" 2>"/dev/null" | awk '{print $1; exit}')"
+	local page="$1" branch="$2" commit_hash status=0
+	commit_hash="$(git ls-remote "$page.git" "refs/heads/$branch" 2>"/dev/null" | awk '{print $1; exit}')" || status="$(__abort_on_interrupt "$?")"
+	if (( status != 0 )) || [[ -z "$commit_hash" ]]; then
+		return 1
+	fi
 	printf '%s\n' "$commit_hash"
 }
 
@@ -190,8 +194,12 @@ function resolve_download() {
 	if [[ -n "$saved_commit" ]]; then
 		requirement_commit="$saved_commit"
 		requirement_download="$requirement_page/archive/$requirement_commit.zip"
-		local full
-		full="$(git ls-remote "$requirement_page.git" "$requirement_commit" 2>"/dev/null" | awk '{print $1; exit}')"
+		local full status=0
+		full="$(git ls-remote "$requirement_page.git" "$requirement_commit" 2>"/dev/null" | awk '{print $1; exit}')" || status="$(__abort_on_interrupt "$?")"
+		if (( status != 0 )); then
+			__error "failed to resolve commit %s for %s" "$requirement_commit" "$requirement_project"
+			return 1
+		fi
 		[[ -n "$full" ]] && requirement_commit="$full"
 		__verbose "using pinned commit for %s: %s" "$requirement_project" "$requirement_commit"
 		return 0
@@ -212,8 +220,11 @@ function resolve_download() {
 
 	if [[ -n "$requirement_branch" ]]; then
 		requirement_download="$requirement_page/archive/refs/heads/$requirement_branch.zip"
-		requirement_commit="$(branch_commit "$requirement_page" "$requirement_branch")"
-		__verbose "using branch for %s: %s (%s)" "$requirement_project" "$requirement_branch" "${requirement_commit:-"(no commit)"}"
+		if ! requirement_commit="$(branch_commit "$requirement_page" "$requirement_branch")"; then
+			__error "failed to resolve branch %s for %s" "$requirement_branch" "$requirement_project"
+			return 1
+		fi
+		__verbose "using branch for %s: %s (%s)" "$requirement_project" "$requirement_branch" "$requirement_commit"
 
 		return 0
 	fi
@@ -229,7 +240,10 @@ function resolve_download() {
 
 	requirement_branch="$branch_primary"
 	requirement_download="$requirement_page/archive/refs/heads/$requirement_branch.zip"
-	requirement_commit="$(branch_commit "$requirement_page" "$requirement_branch")"
+	if ! requirement_commit="$(branch_commit "$requirement_page" "$requirement_branch")"; then
+		__error "failed to resolve primary branch %s for %s" "$branch_primary" "$requirement_project"
+		return 1
+	fi
 	__info "falling back to primary branch %s for %s" "$branch_primary" "$requirement_project"
 }
 
@@ -343,7 +357,7 @@ function record_pin() {
 		return 0
 	fi
 
-	printf '# name=%s\n# type=url\n' "$requirement_project" >> "$pinned_partial"
+	printf '# name=%s\n# _type=package\n' "$requirement_project" >> "$pinned_partial"
 	[[ "$entry_installation_root" != "$installation_root" ]] && printf '# installation_root=%s\n' "$entry_installation_root" >> "$pinned_partial"
 	[[ "$entry_installation_path" != "library" ]] && printf '# installation_path=%s\n' "$entry_installation_path" >> "$pinned_partial"
 	[[ -n "$requirement_commit" ]] && printf '# commit=%s\n' "$requirement_commit" >> "$pinned_partial"
@@ -352,21 +366,14 @@ function record_pin() {
 	__verbose "recorded pin for %s" "$requirement_project"
 }
 
-function record_pin_check() {
-	local kind="$1" name="$2"
-	printf '# name=%s\n# type=%s\n%s\n\n' "$name" "$kind" "$name" >> "$pinned_partial"
-}
-
 function backup_installation_directory() {
 	local path="$1" name="$2"
 	mkdir --parents -- "$installation_archive_directory"
 
-	local destination
-	destination="$(unique_destination "$installation_archive_directory/$name-$(date_stamp_from_path "$path")")"
+	backup_destination="$(unique_destination "$installation_archive_directory/$name-$(date_stamp_from_path "$path")")"
+	mv -- "$path" "$backup_destination"
 
-	mv -- "$path" "$destination"
-
-	__info "moved previous install %s -> %s" "$path" "$destination"
+	__info "moved previous install %s -> %s" "$path" "$backup_destination"
 }
 
 function extract_zip() {
@@ -441,27 +448,41 @@ function abandon_partial() {
 	exit "$status"
 }
 
-function check_program() {
-	local name="$1"
-	__guard_program_exists "$name"
-	record_pin_check "program" "$name"
-	seen["program:$name"]="checked"
-
-	__info "program %s is available" "$name"
+function record_requirement_pin() {
+	local name="$1" program="$2" apt="$3"
+	printf '# name=%s\n# _type=requirement\n' "$name" >> "$pinned_partial"
+	[[ -n "$program" ]] && printf '# program=%s\n' "$program" >> "$pinned_partial"
+	[[ -n "$apt" ]] && printf '# apt=%s\n' "$apt" >> "$pinned_partial"
+	printf '\n' >> "$pinned_partial"
+	__verbose "recorded requirement pin for %s" "$name"
 }
 
-function check_apt_package() {
-	local name="$1"
-	local status_line
-	status_line="$(dpkg-query -W --showformat='${Status}\n' -- "$name" 2>"/dev/null")" || status_line=""
-	if [[ "$status_line" != "install ok installed" ]]; then
-		__error "apt package %s is not installed" "$name"
-		local_exit_failsafe
-	fi
-	record_pin_check "apt" "$name"
-	seen["apt:$name"]="checked"
+function check_requirement() {
+	local name="$1" program="$2" apt="$3"
 
-	__info "apt package %s is installed" "$name"
+	if [[ -n "$program" ]]; then
+		if __guard_program_exists --no-exit "$program"; then
+			__info "requirement satisfied by program %s" "$program"
+			record_requirement_pin "$name" "$program" "$apt"
+			seen["program:$program"]="checked"
+			return 0
+		fi
+		__verbose "program %s not found, trying apt fallback" "$program"
+	fi
+
+	if [[ -n "$apt" ]]; then
+		local status_line
+		status_line="$(dpkg-query -W --showformat='${Status}\n' -- "$apt" 2>"/dev/null")" || status_line=""
+		if [[ "$status_line" == "install ok installed" ]]; then
+			__info "requirement satisfied by apt package %s" "$apt"
+			record_requirement_pin "$name" "$program" "$apt"
+			seen["apt:$apt"]="checked"
+			return 0
+		fi
+	fi
+
+	__error "requirement not satisfied (program=%s, apt=%s)" "${program:-"(none)"}" "${apt:-"(none)"}"
+	local_exit_failsafe
 }
 
 function requirement_identity() {
@@ -586,7 +607,7 @@ function process_requirement() {
 	for key in "${tree_order[@]}"; do
 		local name type value
 		name="$(get_metadata "name" "$key")" || name=""
-		type="$(get_metadata "type" "$key")" || type=""
+		type="$(get_metadata "_type" "$key")" || type=""
 		commit="$(get_metadata "commit" "$key")" || commit=""
 		value="$(get_metadata "_" "$key")" || value=""
 
@@ -603,33 +624,32 @@ function process_requirement() {
 		entry_installation_path="${entry_installation_path%"/"}"
 		entry_installation_path="${entry_installation_path#"/"}"
 
-		[[ -z "$value" ]] && continue
+		[[ -z "$value" && "$type" != "requirement" ]] && continue
 
 		name="$(__trim_whitespaces "$name")"
 		type="$(__trim_whitespaces "$type")"
 		value="$(__trim_whitespaces "$value")"
 
 		if [[ -z "$type" && "$value" == "http"* ]]; then
-			type="url"
+			type="package"
 		fi
 
 		case "$type" in
-			"program")
-				local program_name="${name:-"$value"}"
-				[[ -n "${seen["program:$program_name"]-}" ]] && continue
-				check_program "$program_name"
+			"requirement")
+				local req_program req_apt req_name
+				req_program="$(get_metadata "program" "$key")" || req_program=""
+				req_apt="$(get_metadata "apt" "$key")" || req_apt=""
+				req_program="$(__trim_whitespaces "$req_program")"
+				req_apt="$(__trim_whitespaces "$req_apt")"
+				req_name="${name:-"${req_program:-"$req_apt"}"}"
+
+				check_requirement "$req_name" "$req_program" "$req_apt"
 				continue
 				;;
-			"apt")
-				local package_name="${name:-"$value"}"
-				[[ -n "${seen["apt:$package_name"]-}" ]] && continue
-				check_apt_package "$package_name"
-				continue
-				;;
-			"url"|"")
+			"package"|"")
 				;;
 			*)
-				__error "unknown type %s in %s" "$type" "$file"
+				__error "unknown _type %s in %s" "$type" "$file"
 				local_exit_failsafe
 				;;
 		esac
@@ -686,7 +706,9 @@ function process_requirement() {
 		fi
 		requirement_sha256="$entry_sha256"
 
-		resolve_download
+		if ! resolve_download; then
+			exit 1
+		fi
 
 		if (( depth == 0 )) || $update_to_any_depth; then
 			apply_force_download_newer
@@ -1053,8 +1075,11 @@ function install_package() {
 		[[ -n "$(settings_value "$path/installation-settings.markdown" "commit")" ]] && continue
 		page="$(settings_value "$path/installation-settings.markdown" "source url")"
 		[[ -z "$page" || "$page" != https://github.com/* ]] && continue
-		commit="$(git ls-remote "$page.git" "refs/heads/master" 2>"/dev/null" | awk '{print $1; exit}')"
-		[[ -z "$commit" ]] && continue
+		local status=0
+		commit="$(git ls-remote "$page.git" "refs/heads/master" 2>"/dev/null" | awk '{print $1; exit}')" || status="$(__abort_on_interrupt "$?")"
+		if (( status != 0 )) || [[ -z "$commit" ]]; then
+			continue
+		fi
 		grep -q '^- commit:' "$path/installation-settings.markdown" || printf -- '- commit: %s\n' "$commit" >> "$path/installation-settings.markdown"
 	done
 
@@ -1078,8 +1103,11 @@ function install_package() {
 			if [[ "$page" != https://github.com/* ]]; then
 				continue
 			fi
-			remote_commit="$(git ls-remote "$page.git" "refs/heads/master" 2>"/dev/null" | awk '{print $1; exit}')"
-			[[ -z "$remote_commit" || "$remote_commit" == "$pinned_commit" ]] && continue
+			local status=0
+			remote_commit="$(git ls-remote "$page.git" "refs/heads/master" 2>"/dev/null" | awk '{print $1; exit}')" || status="$(__abort_on_interrupt "$?")"
+			if (( status != 0 )) || [[ -z "$remote_commit" || "$remote_commit" == "$pinned_commit" ]]; then
+				continue
+			fi
 
 			updates+=("$project")
 			__info "update available for %s: %s -> %s" "$project" "$pinned_commit" "$remote_commit"
@@ -1097,6 +1125,7 @@ function install_package() {
 	fi
 
 	local rebooted=false
+	local -a core_failures=()
 	if $force_download_newer; then
 		local project path
 		for project in "${!installed_paths[@]}"; do
@@ -1131,31 +1160,80 @@ function install_package() {
 			page="$(settings_value "$settings" "source url")"
 			[[ -z "$page" ]] && continue
 
-			commit="$(git ls-remote "$page.git" "refs/heads/master" 2>"/dev/null" | awk '{print $1; exit}')"
-			[[ -z "$commit" || "$commit" == "$installed_commit" ]] && continue
+			local status=0
+			commit="$(git ls-remote "$page.git" "refs/heads/master" 2>"/dev/null" | awk '{print $1; exit}')" || status="$(__abort_on_interrupt "$?")"
+			if (( status != 0 )) || [[ -z "$commit" || "$commit" == "$installed_commit" ]]; then
+				continue
+			fi
 
 			__info "commit changed for %s, re-downloading" "$project"
+
+			# Before backup_installation_directory
+			local old_settings_content=""
+			if [[ -f "$path/installation-settings.markdown" ]]; then
+				old_settings_content="$(cat -- "$path/installation-settings.markdown")"
+			fi
 			backup_installation_directory "$path" "$project"
 
 			local download_url="${page}/archive/refs/heads/master.zip"
 			local zip_temporary
 			zip_temporary="$(__create_temporary_file).zip"
-			curl -fL --retry 3 --retry-delay 2 -o "$zip_temporary" -- "$download_url" || continue
-			extract_zip "$zip_temporary" "$path" || continue
+
+			status=0
+			curl -fL --retry 3 --retry-delay 2 -o "$zip_temporary" -- "$download_url" || status="$(__abort_on_interrupt "$?")"
+			if (( status != 0 )); then
+				[[ -f "$zip_temporary" ]] && rm -f -- "$zip_temporary"
+				mv -- "$backup_destination" "$path"
+				__warn "core update failed for %s (download): %s" "$project" "$download_url"
+				core_failures+=("$project")
+				continue
+			fi
+
+			if ! extract_zip "$zip_temporary" "$path"; then
+				[[ -f "$zip_temporary" ]] && rm -f -- "$zip_temporary"
+				[[ -e "$path" ]] && rm -rf -- "$path"
+				mv -- "$backup_destination" "$path"
+				__warn "core update failed for %s (extract)" "$project"
+				core_failures+=("$project")
+				continue
+			fi
 			rm -f -- "$zip_temporary"
 
-			cat >| "$path/installation-settings.markdown" <<EOF
-# installation settings
+			# merge: keep every previous key, overwrite only the ones that changed
+			declare -A keep=()
+			if [[ -n "$old_settings_content" ]]; then
+				local line key val
+				while IFS= read -r line || [[ -n "$line" ]]; do
+					if [[ "$line" =~ ^[[:space:]]*-[[:space:]]*([^:]+):[[:space:]]*(.*)$ ]]; then
+						key="$(__trim_whitespaces "${BASH_REMATCH[1]}")"
+						val="${BASH_REMATCH[2]}"
+						keep["$key"]="$val"
+					fi
+				done <<< "$old_settings_content"
+			fi
 
-- source url: ${page}
-- download url: ${download_url}
-- commit: ${commit}
-- branch: ${branch_primary}
-- install directory: ${path}
-- installed at: $(date +%d-%m-%Y-%H-%M-%S)
-EOF
-		rebooted=true
+			keep["source url"]="$page"
+			keep["download url"]="$download_url"
+			keep["commit"]="$commit"
+			keep["branch"]="$branch_primary"
+			keep["install directory"]="$path"
+			keep["installed at"]="$(date +%d-%m-%Y-%H-%M-%S)"
+			keep["bootstrapped"]="true"
+			{
+				printf '%s\n' "# installation settings" ""
+				local k
+				for k in "${!keep[@]}"; do
+					printf -- '- %s: %s\n' "$k" "${keep[$k]}"
+				done
+			} >| "$path/installation-settings.markdown"
+
+			rebooted=true
 		done
+
+		if (( ${#core_failures[@]} > 0 )); then
+			__error "core-library updates failed for: %s" "${core_failures[*]}"
+			local_exit_failsafe
+		fi
 	fi
 
 	if $rebooted; then

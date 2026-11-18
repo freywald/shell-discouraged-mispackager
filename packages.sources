@@ -1,22 +1,23 @@
 # name=ex10dead_common_library
-# type=url
+# _type=package
 https://github.com/freywald/ex10dead-common-library
 
 # name=desynchronizer
-# type=url
+# _type=package
 https://github.com/freywald/desynchronizer
 
-# type=apt
-curl
+# _type=requirement
+# apt=curl
 
-# type=apt
-unzip
+# _type=requirement
+# apt=unzip
 
-# type=apt
-git
+# _type=requirement
+# apt=git
 
-# type=program
-sha256sum
+# _type=requirement
+# program=sha256sum
+# apt=coreutils
 
-# type=apt
-python3
+# _type=requirement
+# apt=python3
