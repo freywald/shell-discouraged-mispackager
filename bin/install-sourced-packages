@@ -1136,8 +1136,28 @@ EOF
 
 	__info "[%s] building bibliography" "__$__current_script_name"
 
-	# breadth-first queue of "file<TAB>depth"
+	# Seed the queue with the top-level sources
 	queue+=("$source_file"$'\t'"0")
+
+	# Also seed with sources from every already-installed (bootstrapped) package
+	local project path nested
+	for project in "${!installed_paths[@]}"; do
+		path="${installed_paths["$project"]}"
+		[[ ! -d "$path" ]] && continue
+
+		nested=""
+		if [[ -f "$path/$PINNED_FILE" ]] && ! $force_download_newer; then
+			nested="$path/$PINNED_FILE"
+		elif [[ -f "$path/$SOURCES_FILE" ]]; then
+			nested="$path/$SOURCES_FILE"
+		fi
+
+		[[ -z "$nested" ]] && continue
+		# Avoid enqueueing the top-level file twice
+		[[ "$nested" == "$source_file" ]] && continue
+
+		queue+=("$nested"$'\t'"0"$'\t'"$project")
+	done
 
 	while ((${#queue[@]} > 0)); do
 		entry="${queue[0]}"
