@@ -30,6 +30,7 @@ declare -A decided_by=()
 declare -a queue=()
 declare -A pinned_commits=()
 declare -A pinned_urls=()
+declare -A processed_files=()
 
 if ! declare -p installed_paths &>"/dev/null"; then
 	declare -A installed_paths=()
@@ -531,6 +532,12 @@ function process_requirement() {
 		__error "requirements file not found: %s" "$file"
 		local_exit_failsafe
 	fi
+
+	# Skip a sources file that has already been processed this run
+	if [[ -n "${processed_files["$file"]-}" ]]; then
+		return 0
+	fi
+	processed_files["$file"]=1
 
 	__heading "Parsing sources"
 	__info "Parsing file %s…" "$file"
