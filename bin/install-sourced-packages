@@ -1022,6 +1022,40 @@ function install_package() {
 	done
 	unset project_locations
 
+	# Without --update, check whether core-library packages have newer master commits
+	if ! $force_download_newer; then
+		local project path page pinned_commit remote_commit
+		local updates=()
+		for project in "${!installed_paths[@]}"; do
+			path="${installed_paths["$project"]}"
+			[[ "$path" != *"/core-library/"* ]] && continue
+			[[ ! -d "$path" ]] && continue
+
+			page="$(settings_value "$path/installation-settings.markdown" "source url")"
+			[[ -z "$page" ]] && continue
+
+			pinned_commit="${pinned_commits["$project"]-}"
+			[[ -z "$pinned_commit" ]] && pinned_commit="$(settings_value "$path/installation-settings.markdown" "commit")"
+			[[ -z "$pinned_commit" ]] && continue
+
+			remote_commit="$(git ls-remote "$page.git" "refs/heads/master" 2>"/dev/null" | awk '{print $1; exit}')"
+			[[ -z "$remote_commit" || "$remote_commit" == "$pinned_commit" ]] && continue
+
+			updates+=("$project")
+			__info "update available for %s: %s -> %s" "$project" "$pinned_commit" "$remote_commit"
+		done
+
+		if (( ${#updates[@]} > 0 )); then
+			if __confirm "Core-library updates are available. Update now?"; then
+				force_download_newer=true
+				source_file="$input_file"
+				__info "updating from %s" "$input_file"
+			else
+				__info "continuing without update"
+			fi
+		fi
+	fi
+
 	local rebooted=false
 	if $force_download_newer; then
 		local project path
