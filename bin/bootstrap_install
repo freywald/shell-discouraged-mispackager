@@ -238,8 +238,8 @@ function __create_temporary_directory() {
 }
 
 function __error() { printf "$@"; echo; exit 1; }
-
-function __info() { printf "$@"; echo; }
+function __info() { printf "[INFO] $@"; echo; }
+function __verbose() { printf "[VERBOSE] $@"; echo; }
 
 EXIT_OK=0
 EXIT_INTERRUPTED=130   # 128 + SIGINT
