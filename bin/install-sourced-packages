@@ -746,12 +746,7 @@ function process_requirement() {
 			local_exit_failsafe
 		fi
 
-__info "DEBUG %s: target=%s exists=%s req_commit=%s pin_commit=%s" \
-	"$project" \
-	"$target_library_path" \
-	"$([[ -d "$target_library_path" ]] && echo yes || echo no)" \
-	"${requirement_commit:-"(empty)"}" \
-	"${pinned_commits["$project"]:-"(empty)"}"
+__info "DEBUG %s: target=%s exists=%s req_commit=%s pin_commit=%s" "$project" "$target_library_path" "$([[ -d "$target_library_path" ]] && echo yes || echo no)" "${requirement_commit:-"(empty)"}" "${pinned_commits["$project"]:-"(empty)"}"
 
 		if ! $force_installation_all && same_install; then
 			__info "already installed, skipping %s" "$project"
@@ -1029,13 +1024,27 @@ function install_package() {
 	done
 	unset project_locations
 
-	# Without --update, check whether core-library packages have newer master commits
+	# Record commit for bootstrapped packages that have none yet
+	local project path page commit
+	for project in "${!installed_paths[@]}"; do
+		path="${installed_paths["$project"]}"
+		[[ ! -d "$path" ]] && continue
+		[[ "$(settings_value "$path/installation-settings.markdown" "bootstrapped")" != "true" ]] && continue
+		[[ -n "$(settings_value "$path/installation-settings.markdown" "commit")" ]] && continue
+		page="$(settings_value "$path/installation-settings.markdown" "source url")"
+		[[ -z "$page" || "$page" != https://github.com/* ]] && continue
+		commit="$(git ls-remote "$page.git" "refs/heads/master" 2>"/dev/null" | awk '{print $1; exit}')"
+		[[ -z "$commit" ]] && continue
+		grep -q '^- commit:' "$path/installation-settings.markdown" || printf -- '- commit: %s\n' "$commit" >> "$path/installation-settings.markdown"
+	done
+
+	# Without --update, check whether bootstrapped packages have newer master commits
 	if ! $force_download_newer; then
 		local project path page pinned_commit remote_commit
 		local updates=()
 		for project in "${!installed_paths[@]}"; do
 			path="${installed_paths["$project"]}"
-			[[ "$path" != *"/core-library/"* ]] && continue
+			[[ "$(settings_value "$path/installation-settings.markdown" "bootstrapped")" != "true" ]] && continue
 			[[ ! -d "$path" ]] && continue
 
 			page="$(settings_value "$path/installation-settings.markdown" "source url")"
@@ -1045,6 +1054,10 @@ function install_package() {
 			[[ -z "$pinned_commit" ]] && pinned_commit="$(settings_value "$path/installation-settings.markdown" "commit")"
 			[[ -z "$pinned_commit" ]] && continue
 
+			# Only GitHub URLs
+			if [[ "$page" != https://github.com/* ]]; then
+				continue
+			fi
 			remote_commit="$(git ls-remote "$page.git" "refs/heads/master" 2>"/dev/null" | awk '{print $1; exit}')"
 			[[ -z "$remote_commit" || "$remote_commit" == "$pinned_commit" ]] && continue
 

@@ -170,6 +170,7 @@ function bootstrap_install() {
 - sha256: ${sha256}
 - install directory: ${destination}
 - installed at: $(date +%d-%m-%Y-%H-%M-%S)
+- bootstrapped: true
 EOF
 
 		[[ -d "$temporary_directory" ]] && rm --recursive --force -- "$temporary_directory"
