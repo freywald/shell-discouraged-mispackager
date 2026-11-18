@@ -278,6 +278,18 @@ function same_install() {
 
 	local installed_commit="${pinned_commits["$requirement_project"]-}"
 
+	if [[ -z "$requirement_commit" && -f "$target_library_path/installation-settings.markdown" ]]; then
+		local installed_tag installed_version
+		installed_tag="$(settings_value "$target_library_path/installation-settings.markdown" "tag")"
+		installed_version="$(settings_value "$target_library_path/installation-settings.markdown" "version")"
+		if [[ -n "$requirement_tag" && "$installed_tag" == "$requirement_tag" ]]; then
+			return 0
+		fi
+		if [[ -n "$requirement_version" && "$installed_version" == "$requirement_version" ]]; then
+			return 0
+		fi
+	fi
+
 	if [[ -n "$requirement_commit" ]]; then
 		[[ -n "$installed_commit" && "$installed_commit" == "$requirement_commit" ]]
 		return $?
@@ -733,8 +745,6 @@ __info "DEBUG %s: target=%s exists=%s req_commit=%s pin_commit=%s" \
 	"$([[ -d "$target_library_path" ]] && echo yes || echo no)" \
 	"${requirement_commit:-"(empty)"}" \
 	"${pinned_commits["$project"]:-"(empty)"}"
-
-
 
 		if ! $force_installation_all && same_install; then
 			__info "already installed, skipping %s" "$project"
