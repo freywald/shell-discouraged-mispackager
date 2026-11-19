@@ -187,17 +187,29 @@ function update_pin_commit() {
 
 	local temporary
 	temporary="$(__create_temporary_file)"
-	local current="" line
+	local current="" seen_commit=false line
 	while IFS= read -r line || [[ -n "$line" ]]; do
 		if [[ "$line" =~ ^#\ name=([A-Za-z0-9_]+)$ ]]; then
+			# previous block had no commit line: insert one before the next name
+			if [[ -n "$current" && "$current" == "$name" && "$seen_commit" == false ]]; then
+				printf '# commit=%s\n' "$new_commit" >> "$temporary"
+			fi
 			current="${BASH_REMATCH[1]}"
+			seen_commit=false
 			printf '%s\n' "$line" >> "$temporary"
 		elif [[ "$current" == "$name" && "$line" =~ ^#\ commit= ]]; then
 			printf '# commit=%s\n' "$new_commit" >> "$temporary"
+			seen_commit=true
 		else
 			printf '%s\n' "$line" >> "$temporary"
 		fi
 	done < "$pinned_file"
+
+	# block was the last one and had no commit line
+	if [[ "$current" == "$name" && "$seen_commit" == false ]]; then
+		printf '# commit=%s\n' "$new_commit" >> "$temporary"
+	fi
+
 	mv -f -- "$temporary" "$pinned_file"
 }
 
@@ -927,6 +939,7 @@ function process_requirement() {
 
 function install_package() {
 	print_sources=false
+	local explicit_update=false
 
 	while (($# > 0)); do
 		if [[ "$1" == "--debug" ]]; then
@@ -960,14 +973,17 @@ function install_package() {
 			shift ||__expression_may_fail
 		elif [[ "$1" == "--force-download-newer" || "$1" == "--update" ]]; then
 			force_download_newer=true
+			explicit_update=true
 			shift ||__expression_may_fail
 		elif [[ "$1" == "--update-pinned" ]]; then
 			force_download_newer=true
 			update_pinned=true
+			explicit_update=true
 			shift ||__expression_may_fail
 		elif [[ "$1" == "--update-to-any-depth" ]]; then
 			force_download_newer=true
 			update_to_any_depth=true
+			explicit_update=true
 			shift ||__expression_may_fail
 		elif [[ "$1" == "--" ]]; then
 			shift ||__expression_may_fail
@@ -976,6 +992,23 @@ function install_package() {
 			local_exit_failsafe
 		fi
 	done
+
+	# Start every invocation clean so a post-reboot re-call does not inherit
+	# update mode or leftover queue/decision state from the previous call.
+	if ! $explicit_update; then
+		force_download_newer=false
+		update_to_any_depth=false
+		update_pinned=false
+	fi
+	queue=()
+	processed_files=()
+	seen=()
+	decided_version=()
+	decided_by=()
+	pinned_commits=()
+	pinned_urls=()
+	handler_sourced=()
+	registered_handlers=()
 
 	installation_root="${installation_root%"/"}"
 
@@ -1015,17 +1048,6 @@ function install_package() {
 	if [[ ! -f "$input_file" ]]; then
 		__error "input file not found: %s" "$input_file"
 		local_exit_failsafe
-	fi
-
-	source_file="$input_file"
-
-	if $force_download_newer; then
-		__info "updating from %s" "$input_file"
-	elif [[ -f "$pinned_file" && -s "$pinned_file" ]]; then
-		source_file="$pinned_file"
-		__info "requirements are pinned; using %s" "$pinned_file"
-	else
-		__info "no pin file; using %s" "$input_file"
 	fi
 
 	# Even with --update, remember the commits recorded in the pin file
@@ -1112,8 +1134,8 @@ function install_package() {
 		grep -q '^- commit:' "$path/installation-settings.markdown" || printf -- '- commit: %s\n' "$commit" >> "$path/installation-settings.markdown"
 	done
 
-	# Without --update, check whether bootstrapped packages have newer master commits
-	if ! $force_download_newer; then
+	# Without an explicit --update, check whether bootstrapped packages have newer master commits
+	if ! $explicit_update; then
 		local project path page pinned_commit remote_commit
 		local updates=()
 		for project in "${!installed_paths[@]}"; do
@@ -1145,8 +1167,7 @@ function install_package() {
 		if (( ${#updates[@]} > 0 )); then
 			if __confirm "Core-library updates are available. Update now?"; then
 				force_download_newer=true
-				source_file="$input_file"
-				__info "updating from %s" "$input_file"
+				__info "updating bootstrapped libraries"
 			else
 				__info "continuing without update"
 			fi
@@ -1268,6 +1289,23 @@ function install_package() {
 		__info "bootstrapped libraries updated, reboot required"
 		force_download_newer=false
 		return "$EXIT_REBOOT"
+	fi
+
+	# A confirm only authorised core updates
+	if ! $explicit_update; then
+		force_download_newer=false
+	fi
+
+	# Decide which sources file to use for the package queue.
+	# A post-reboot call (explicit_update=false) always prefers the pin file.
+	source_file="$input_file"
+	if $explicit_update; then
+		__info "updating from %s" "$input_file"
+	elif [[ -f "$pinned_file" && -s "$pinned_file" ]]; then
+		source_file="$pinned_file"
+		__info "requirements are pinned; using %s" "$pinned_file"
+	else
+		__info "no pin file; using %s" "$input_file"
 	fi
 
 	mkdir --parents -- "$zip_archive_directory" "$installation_archive_directory" "$(dirname -- "$dynamic_file")"
