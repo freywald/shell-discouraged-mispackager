@@ -32,6 +32,7 @@ declare -a queue=()
 declare -A pinned_commits=()
 declare -A pinned_urls=()
 declare -A processed_files=()
+declare -A handler_paths=()
 
 if ! declare -p installed_paths &>"/dev/null"; then
 	declare -A installed_paths=()
@@ -398,6 +399,24 @@ function record_pin() {
 	__verbose "recorded pin for %s" "$requirement_project"
 }
 
+function source_handler_once() {
+	local project="$1" handler="$2"
+	[[ ! -f "$handler" ]] && return 0
+
+	local previous="${handler_paths["$project"]-}"
+	if [[ -n "$previous" && "$previous" != "$handler" ]]; then
+		__warn "multiple handlers for %s: already used %s, ignoring %s" "$project" "$previous" "$handler"
+		return 0
+	fi
+
+	if [[ -z "$previous" ]]; then
+		__info "sourcing post-installation handler %s" "$handler"
+		source -- "$handler"
+		handler_sourced["$project"]=1
+		handler_paths["$project"]="$handler"
+	fi
+}
+
 function backup_installation_directory() {
 	local path="$1" name="$2"
 	mkdir --parents -- "$installation_archive_directory"
@@ -758,11 +777,7 @@ function process_requirement() {
 			handler="${installed_paths["$project"]}/$CONTROL_DIRECTORY/$project"
 		fi
 
-		if [[ -f "$handler" ]]; then
-			__info "sourcing post-installation handler %s" "$handler"
-			__require_once "$handler"
-			handler_sourced["$project"]=1
-		fi
+		source_handler_once "$project" "$handler"
 
 		local is_bootstrapped=false
 		if [[ -n "${installed_paths["$project"]-}" ]]; then
@@ -913,11 +928,7 @@ function process_requirement() {
 		if [[ ! -f "$handler" && -n "$target_library_path" ]]; then
 			handler="$target_library_path/$CONTROL_DIRECTORY/$project"
 		fi
-		if [[ -f "$handler" ]]; then
-			__info "sourcing post-installation handler %s" "$handler"
-			__require_once "$handler"
-			handler_sourced["$project"]=1
-		fi
+		source_handler_once "$project" "$handler"
 		installation_complete=true
 		installation_target=""
 
@@ -1007,6 +1018,7 @@ function install_package() {
 	pinned_urls=()
 	handler_sourced=()
 	registered_handlers=()
+	handler_paths=()
 
 	installation_root="${installation_root%"/"}"
 
@@ -1372,6 +1384,7 @@ function install_package() {
 			backup_installation_directory "$path" "$orphan"
 			unset "installed_paths[$orphan]"
 			unset "handler_sourced[$orphan]"
+			unset "handler_paths[$orphan]"
 			for id in "${!registered_handlers[@]}"; do
 				[[ "$id" == "$orphan" ]] && unset "registered_handlers[$id]"
 			done
@@ -1386,11 +1399,7 @@ function install_package() {
 		[[ ! -d "$path" ]] && continue
 
 		handler="$path/$CONTROL_DIRECTORY/$project"
-		if [[ -f "$handler" ]]; then
-			__info "sourcing handler for installed %s" "$project"
-			source -- "$handler"
-			handler_sourced["$project"]=1
-		fi
+		source_handler_once "$project" "$handler"
 	done
 
 	# Merge bootstrapped.dynamic into the normal dynamic file, then remove it
