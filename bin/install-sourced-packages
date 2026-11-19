@@ -1174,6 +1174,7 @@ function install_package() {
 
 	local rebooted=false
 	local -a core_failures=()
+	declare -A core_pin_updates=()
 	if $force_download_newer; then
 		local project path
 		for project in "${!installed_paths[@]}"; do
@@ -1207,6 +1208,7 @@ function install_package() {
 				__info "pin for %s is behind settings, updating pin to %s" "$project" "$commit"
 				update_pin_commit "$project" "$commit"
 				pinned_commits["$project"]="$commit"
+				core_pin_updates["$project"]="$commit"
 				continue
 			fi
 
@@ -1273,6 +1275,7 @@ function install_package() {
 
 			update_pin_commit "$project" "$commit"
 			pinned_commits["$project"]="$commit"
+			core_pin_updates["$project"]="$commit"
 
 			rebooted=true
 		done
@@ -1305,6 +1308,21 @@ function install_package() {
 	else
 		__info "no pin file; using %s" "$input_file"
 	fi
+
+	# Source handlers for every installed project, not only those seen in sources
+	local project path handler
+	for project in "${!installed_paths[@]}"; do
+		[[ -n "${handler_sourced["$project"]-}" ]] && continue
+		path="${installed_paths["$project"]}"
+		[[ ! -d "$path" ]] && continue
+
+		handler="$path/$CONTROL_DIRECTORY/$project"
+		if [[ -f "$handler" ]]; then
+			__info "sourcing handler for installed %s" "$project"
+			source -- "$handler"
+			handler_sourced["$project"]=1
+		fi
+	done
 
 	mkdir --parents -- "$zip_archive_directory" "$installation_archive_directory" "$(dirname -- "$dynamic_file")"
 
@@ -1377,6 +1395,11 @@ function install_package() {
 	else
 		rm -f -- "$pinned_partial"
 	fi
+
+	local pin_project
+	for pin_project in "${!core_pin_updates[@]}"; do
+		update_pin_commit "$pin_project" "${core_pin_updates["$pin_project"]}"
+	done
 
 	if [[ -f "$dynamic_file" ]]; then
 		source -- "$dynamic_file"
