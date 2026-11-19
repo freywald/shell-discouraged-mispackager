@@ -1309,21 +1309,6 @@ function install_package() {
 		__info "no pin file; using %s" "$input_file"
 	fi
 
-	# Source handlers for every installed project, not only those seen in sources
-	local project path handler
-	for project in "${!installed_paths[@]}"; do
-		[[ -n "${handler_sourced["$project"]-}" ]] && continue
-		path="${installed_paths["$project"]}"
-		[[ ! -d "$path" ]] && continue
-
-		handler="$path/$CONTROL_DIRECTORY/$project"
-		if [[ -f "$handler" ]]; then
-			__info "sourcing handler for installed %s" "$project"
-			source -- "$handler"
-			handler_sourced["$project"]=1
-		fi
-	done
-
 	mkdir --parents -- "$zip_archive_directory" "$installation_archive_directory" "$(dirname -- "$dynamic_file")"
 
 	dynamic_partial="$(__create_temporary_file)"
@@ -1371,6 +1356,41 @@ function install_package() {
 		[[ "$requester" == "$depth" ]] && requester="top-level"
 
 		process_requirement "$file" "$depth" "$requester"
+	done
+
+	# On an explicit update, archive packages that are installed but no longer in any sources file.
+	# Bootstrapped packages stay: they were never listed in sources.
+	if $explicit_update; then
+		local orphan path id
+		for orphan in "${!installed_paths[@]}"; do
+			[[ -n "${seen["$orphan"]-}" ]] && continue
+			path="${installed_paths["$orphan"]}"
+			[[ "$(settings_value "$path/installation-settings.markdown" "bootstrapped")" == "true" ]] && continue
+			[[ ! -d "$path" ]] && continue
+
+			__info "removing %s, no longer in sources" "$orphan"
+			backup_installation_directory "$path" "$orphan"
+			unset "installed_paths[$orphan]"
+			unset "handler_sourced[$orphan]"
+			for id in "${!registered_handlers[@]}"; do
+				[[ "$id" == "$orphan" ]] && unset "registered_handlers[$id]"
+			done
+		done
+	fi
+
+	# Source handlers for every remaining installed project, not only those seen in sources
+	local project path handler
+	for project in "${!installed_paths[@]}"; do
+		[[ -n "${handler_sourced["$project"]-}" ]] && continue
+		path="${installed_paths["$project"]}"
+		[[ ! -d "$path" ]] && continue
+
+		handler="$path/$CONTROL_DIRECTORY/$project"
+		if [[ -f "$handler" ]]; then
+			__info "sourcing handler for installed %s" "$project"
+			source -- "$handler"
+			handler_sourced["$project"]=1
+		fi
 	done
 
 	# Merge bootstrapped.dynamic into the normal dynamic file, then remove it
