@@ -493,7 +493,7 @@ function check_requirement() {
 	local name="$1" program="$2" apt="$3"
 
 	if [[ -n "$program" ]]; then
-		if __guard_program_exists --no-exit "$program"; then
+		if __test_program_exists "$program"; then
 			__info "requirement satisfied by program %s" "$program"
 			record_requirement_pin "$name" "$program" "$apt"
 			seen["program:$program"]="checked"
@@ -503,9 +503,7 @@ function check_requirement() {
 	fi
 
 	if [[ -n "$apt" ]]; then
-		local status_line
-		status_line="$(dpkg-query -W --showformat='${Status}\n' -- "$apt" 2>"/dev/null")" || status_line=""
-		if [[ "$status_line" == "install ok installed" ]]; then
+		if __test_apt_package_exists "$apt"; then
 			__info "requirement satisfied by apt package %s" "$apt"
 			record_requirement_pin "$name" "$program" "$apt"
 			seen["apt:$apt"]="checked"
@@ -1151,7 +1149,7 @@ function install_package() {
 			[[ -z "$pinned_commit" ]] && continue
 
 			# Only GitHub URLs
-			if [[ "$page" != https://github.com/* ]]; then
+			if [[ "$page" != "https://github.com/"* ]]; then
 				continue
 			fi
 			local status=0
