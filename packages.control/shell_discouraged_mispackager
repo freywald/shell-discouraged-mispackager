@@ -1,0 +1,13 @@
+#!/bin/bash
+
+function shell_discouraged_mispackager_setup() {
+	echo "setting up shell_discouraged_mispackager"
+
+	cd "$__ex10dead_common_library_library_path/"
+
+	echo "$PWD/"
+
+	echo "setting up shell_discouraged_mispackager"
+}
+
+register_handler "shell_discouraged_mispackager" "shell_discouraged_mispackager_setup"

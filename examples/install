@@ -67,7 +67,7 @@ function __set_script_path() {
 __set_script_path "$script_path_level" || exit 1
 
 mkdir --parents -- "$installation_root" || exit 1
-touch -- "$installation_root/FLAG_IS_PROJECT" || exit 1
+touch -- "$installation_root/FLAG_IS_MISPACKAGED" || exit 1
 cp -- "Installer/packages.sources" "$installation_root/packages.sources" || exit 1
 
 bootstrap_file="$installation_root/bootstrap_install"
@@ -98,10 +98,10 @@ source -- "$__ex10dead_common_library_library_path/library/common" || exit 1
 __set_script_path "$script_path_level" || exit 1
 __enable_error_handler || exit 1
 
-bootstrap_install "$ex10dead_project_url" "$installation_root/core-library/" --sha256="$ex10dead_project_sha256"|| exit 1
+bootstrap_install "$shell_discouraged_mispackager_url" "$installation_root/core-library/" --sha256="$shell_discouraged_mispackager_sha256"|| exit 1
 
-printf "sha256 verified for %s\n" "./$__ex10dead_project_library_path/bin/install-sourced-packages"
-source -- "$__ex10dead_project_library_path/bin/install-sourced-packages" || exit 1
+printf "sha256 verified for %s\n" "./$__shell_discouraged_mispackager_library_path/bin/install-sourced-packages"
+source -- "$__shell_discouraged_mispackager_library_path/bin/install-sourced-packages" || exit 1
 
 status=0
 ( install_package --installation-root="$installation_root" "$@" ) || status=$?
@@ -112,7 +112,7 @@ if (( status == 12 )); then
 		__set_script_path "$script_path_level" || exit 1
 		__enable_error_handler || exit 1
 
-		source -- "$__ex10dead_project_library_path/bin/install-sourced-packages" || exit 1
+		source -- "$__shell_discouraged_mispackager_library_path/bin/install-sourced-packages" || exit 1
 		install_package --installation-root="$installation_root" "$@"
 	) || status=$?
 fi

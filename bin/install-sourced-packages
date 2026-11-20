@@ -1041,8 +1041,8 @@ function install_package() {
 		local_exit_failsafe
 	fi
 
-	if [[ ! -f "$installation_root/FLAG_IS_PROJECT" ]]; then
-		__error "project flag file does not mark installation root: %s" "$installation_root/FLAG_IS_PROJECT"
+	if [[ ! -f "$installation_root/FLAG_IS_MISPACKAGED" ]]; then
+		__error "project flag file does not mark installation root: %s" "$installation_root/FLAG_IS_MISPACKAGED"
 		local_exit_failsafe
 	fi
 
