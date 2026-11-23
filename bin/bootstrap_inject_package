@@ -81,7 +81,6 @@ function bootstrap_inject_package() {
 		fi
 	done
 
-
 	# Parse GitHub URLs, including /tree/<ref>
 	if [[ "$url" =~ ^https://github.com/([^/]+)/([^/]+)(/tree/([^/]+))?/?$ ]]; then
 		local owner="${BASH_REMATCH[1]}"
@@ -126,17 +125,26 @@ function bootstrap_inject_package() {
 		# (e.g. only a scripts/install file was placed by an outer bootstrap).
 		if [[ ! -f "$settings_file" ]]; then
 			incomplete=true
-		elif ! grep -q '^- bootstrapped:' "$settings_file" 2>/dev/null; then
-			incomplete=true
-		elif [[ ! -d "$destination/bin" && ! -d "$destination/library" && ! -f "$destination/packages.sources" ]]; then
-			# Heuristic: a real package usually has one of these
+		elif ! grep -q '^- bootstrapped:' "$settings_file" 2>"/dev/null"; then
 			incomplete=true
 		fi
 
 		if $incomplete; then
-			__info "existing bootstrap for %s looks incomplete, forcing re-install" "$project_name"
-			# fall through to the full download path by removing the incomplete tree
-			rm -rf -- "$destination"
+			__info "existing bootstrap for %s looks incomplete, archiving and forcing re-install" "$project_name"
+			local archive_directory
+			archive_directory="$installation_root/$ARCHIVE_INSTALLATIONS_DIRECTORY"
+			mkdir --parents -- "$archive_directory"
+			local stamp
+			stamp="$(date +%d-%m-%Y-%H-%M-%S)"
+			local archived
+			archived="$archive_directory/$project_name-incomplete-$stamp"
+			local index=1
+			while [[ -e "$archived" ]]; do
+				archived="$archive_directory/$project_name-incomplete-${stamp}_$index"
+				index="$((index + 1))" ||:
+			done
+			mv -- "$destination" "$archived"
+			__info "moved incomplete %s -> %s" "$destination" "$archived"
 		else
 			__info "Bootstrapping %s not necessary… skipped." "$project_name"
 			# Ensure the marker exists even if settings were deleted
@@ -226,7 +234,7 @@ EOF
 	fi
 
 	local handler
-	handler="$(__normalize_path_slashes "$destination/$CONTROL_DIRECTORY/$project_name")"
+	handler="$destination/$CONTROL_DIRECTORY/$project_name"
 	if [[ -f "$handler" ]]; then
 		__info "sourcing post-installation handler %s" "$handler"
 		if [[ "$(type -t "__require_once")" != "function" ]]; then
@@ -297,4 +305,3 @@ if [[ -z "${installation_root:-}" ]]; then
 	__error "installation_root is empty or not set"
 	local_exit_failsafe
 fi
-
