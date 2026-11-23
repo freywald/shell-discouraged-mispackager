@@ -12,12 +12,12 @@ export LC_NUMERIC="en_US.UTF-8"
 
 shopt -s expand_aliases
 
-readonly ARCHIVE_DOWNLOADS_DIRECTORY="archive/downloads"
-readonly ARCHIVE_INSTALLATIONS_DIRECTORY="archive/installations"
-readonly CONTROL_DIRECTORY="packages.control"
-readonly DYNAMIC_FILE="package-paths.export"
-readonly SOURCES_FILE="packages.sources"
-readonly PINNED_FILE="packages.pinned.sources"
+ARCHIVE_DOWNLOADS_DIRECTORY="archive/downloads"
+ARCHIVE_INSTALLATIONS_DIRECTORY="archive/installations"
+CONTROL_DIRECTORY="packages.control"
+DYNAMIC_FILE="package-paths.export"
+SOURCES_FILE="packages.sources"
+PINNED_FILE="packages.pinned.sources"
 
 function local_exit_failsafe() { exit 1; }
 
