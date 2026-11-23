@@ -1031,7 +1031,7 @@ function install_package() {
 	relative_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 	if [[ -z "${BOOTSTRAPPER_LOADED:-}" ]]; then
-		__require_once "$relative_path/bootstrap_install"
+		__require_once "$relative_path/bootstrap_inject_package"
 	fi
 
 	__info "[%s] installing sourced packages" "__$__current_script_name"
@@ -1046,7 +1046,7 @@ function install_package() {
 		local_exit_failsafe
 	fi
 
-	bootstrap_install "https://github.com/freywald/sourcetree-datafile-format" "$installation_root/core-library"
+	bootstrap_inject_package "https://github.com/freywald/sourcetree-datafile-format" "$installation_root/core-library"
 	__require_once "$__sourcetree_datafile_format_library_path/library/sourcetree-datafile-format"
 
 	input_file="$(__normalize_path_slashes "$installation_root/$SOURCES_FILE")"
