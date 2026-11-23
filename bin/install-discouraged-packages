@@ -511,6 +511,14 @@ function record_requirement_pin() {
 function check_requirement() {
 	local name="$1" program="$2" apt="$3"
 
+	# Already verified earlier in this run — skip the expensive checks and logging
+	if [[ -n "$program" && -n "${seen["program:$program"]-}" ]]; then
+		return 0
+	fi
+	if [[ -n "$apt" && -n "${seen["apt:$apt"]-}" ]]; then
+		return 0
+	fi
+
 	if [[ -n "$program" ]]; then
 		if __test_program_exists "$program"; then
 			__info "requirement satisfied by program %s" "$program"
@@ -609,12 +617,27 @@ function enqueue_nested() {
 
 	[[ -z "$nested" ]] && return 0
 
+	# Normalize before enqueueing so later processed_files checks match
+	nested="$(__normalize_path_slashes "$nested")"
+	nested="${nested%/}"
+
 	__verbose "enqueueing nested requirements from %s (depth %s)" "$library_path" "$depth"
 	queue+=("$nested"$'\t'"$depth"$'\t'"$(basename -- "$library_path")")
 }
 
 function process_requirement() {
 	local file="$1" depth="$2" requester="${3:-"top-level"}"
+
+	# Normalize so // and trailing slashes do not create duplicate entries
+	file="$(__normalize_path_slashes "$file")"
+	file="${file%/}"
+
+	# Prefer a canonical path when the file exists
+	if [[ -f "$file" ]]; then
+		local canonical
+		canonical="$(readlink -f -- "$file" 2>/dev/null || true)"
+		[[ -n "$canonical" ]] && file="$canonical"
+	fi
 
 	if [[ ! -f "$file" ]]; then
 		__error "requirements file not found: %s" "$file"
@@ -1343,6 +1366,8 @@ function install_package() {
 	__info "[%s] building bibliography" "__$__current_script_name"
 
 	# Seed the queue with the top-level sources
+	source_file="$(__normalize_path_slashes "$source_file")"
+	source_file="${source_file%/}"
 	queue+=("$source_file"$'\t'"0")
 
 	# Also seed with sources from every already-installed (bootstrapped) package
@@ -1359,6 +1384,8 @@ function install_package() {
 		fi
 
 		[[ -z "$nested" ]] && continue
+		nested="$(__normalize_path_slashes "$nested")"
+		nested="${nested%/}"
 		# Avoid enqueueing the top-level file twice
 		[[ "$nested" == "$source_file" ]] && continue
 
