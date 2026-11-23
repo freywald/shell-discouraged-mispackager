@@ -1127,21 +1127,29 @@ function install_package() {
 	done
 	unset project_locations
 
-	# Record commit for bootstrapped packages that have none yet
-	local project path page commit
+	# Ensure bootstrapped packages are complete (settings markdown present and usable)
+	# and record their current master commit when missing.
+	local project path page commit settings
 	for project in "${!installed_paths[@]}"; do
 		path="${installed_paths["$project"]}"
 		[[ ! -d "$path" ]] && continue
-		[[ "$(settings_value "$path/installation-settings.markdown" "bootstrapped")" != "true" ]] && continue
-		[[ -n "$(settings_value "$path/installation-settings.markdown" "commit")" ]] && continue
-		page="$(settings_value "$path/installation-settings.markdown" "source url")"
+		settings="$path/installation-settings.markdown"
+		[[ ! -f "$settings" ]] && continue
+		[[ "$(settings_value "$settings" "bootstrapped")" != "true" ]] && continue
+
+		page="$(settings_value "$settings" "source url")"
 		[[ -z "$page" || "$page" != https://github.com/* ]] && continue
-		local status=0
-		commit="$(git ls-remote "$page.git" "refs/heads/master" 2>"/dev/null" | awk '{print $1; exit}')" || status="$(__abort_on_interrupt "$?")"
-		if (( status != 0 )) || [[ -z "$commit" ]]; then
-			continue
+
+		# If settings lack a commit, resolve master and append it
+		if [[ -z "$(settings_value "$settings" "commit")" ]]; then
+			local status=0
+			commit="$(git ls-remote "$page.git" "refs/heads/master" 2>"/dev/null" | awk '{print $1; exit}')" || status="$(__abort_on_interrupt "$?")"
+			if (( status == 0 )) && [[ -n "$commit" ]]; then
+				grep -q '^- commit:' "$settings" || printf -- '- commit: %s\n' "$commit" >> "$settings"
+				# also store a version for later export enrichment
+				grep -q '^- version:' "$settings" || printf -- '- version: master\n' >> "$settings"
+			fi
 		fi
-		grep -q '^- commit:' "$path/installation-settings.markdown" || printf -- '- commit: %s\n' "$commit" >> "$path/installation-settings.markdown"
 	done
 
 	# Without an explicit --update, check whether bootstrapped packages have newer master commits
@@ -1402,15 +1410,32 @@ function install_package() {
 		source_handler_once "$project" "$handler"
 	done
 
-	# Merge bootstrapped.dynamic into the normal dynamic file, then remove it
+	# Merge bootstrapped.dynamic into the normal dynamic file, then remove it.
+	# Enrich each entry with commit and version comments so the export file
+	# matches the format produced by record_library for normal packages.
 	if [[ -f "$runtime_file" ]]; then
-		local line project
+		local line project path settings commit version
 		while IFS= read -r line || [[ -n "$line" ]]; do
 			# Extract project name from __PROJECT_library_path=…
 			if [[ "$line" =~ ^__([A-Za-z0-9_]+)_library_path= ]]; then
 				project="${BASH_REMATCH[1]}"
 				# Only append if this project is not already recorded
 				if ! grep -q -- "^__${project}_library_path=" "$dynamic_partial"; then
+					path="${installed_paths["$project"]-}"
+					settings=""
+					[[ -n "$path" && -d "$path" ]] && settings="$path/installation-settings.markdown"
+
+					commit=""
+					version=""
+					if [[ -n "$settings" && -f "$settings" ]]; then
+						commit="$(settings_value "$settings" "commit")"
+						version="$(settings_value "$settings" "version")"
+						[[ -z "$version" ]] && version="$(settings_value "$settings" "branch")"
+						[[ -z "$version" ]] && version="master"
+					fi
+
+					[[ -n "$commit" ]] && printf '# commit=%s\n' "$commit" >> "$dynamic_partial"
+					[[ -n "$version" ]] && printf '# version="%s"\n' "$version" >> "$dynamic_partial"
 					printf '%s\n' "$line" >> "$dynamic_partial"
 				fi
 			fi
