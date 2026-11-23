@@ -109,7 +109,7 @@ function bootstrap_inject_package() {
 	project_name="${project_name//"-"/"_"}"
 	destination="$(__normalize_path_slashes "$destination/$project_name")"
 
-	printf -v "__${project_name}_library_path" '%s/' "$destination"
+	printf -v "__${project_name}_package_path" '%s/' "$destination"
 
 	__verbose "resolved bootstrap for %s → %s" "$project_name" "$download_url"
 
@@ -222,7 +222,7 @@ EOF
 	rel="${rel#"$installation_root"}"
 	rel="${rel#/}"
 	local line
-	line="$(printf '__%s_library_path="$installation_root/%s"\n' "$project_name" "$(__normalize_path_slashes "$rel/")")"
+	line="$(printf '__%s_package_path="$installation_root/%s"\n' "$project_name" "$(__normalize_path_slashes "$rel/")")"
 	if [[ ! -f "$runtime_file" ]] || ! grep -qF -- "$line" "$runtime_file"; then
 		printf '%s\n' "$line" >> "$runtime_file"
 		__verbose "recorded library path for %s" "$project_name"

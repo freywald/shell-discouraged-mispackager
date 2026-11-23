@@ -329,14 +329,14 @@ function apply_force_download_newer() {
 }
 
 function same_install() {
-	[[ ! -d "$target_library_path" ]] && return 1
+	[[ ! -d "$target_package_path" ]] && return 1
 
 	local installed_commit="${pinned_commits["$requirement_project"]-}"
 
-	if [[ -z "$requirement_commit" && -f "$target_library_path/installation-settings.markdown" ]]; then
+	if [[ -z "$requirement_commit" && -f "$target_package_path/installation-settings.markdown" ]]; then
 		local installed_tag installed_version
-		installed_tag="$(settings_value "$target_library_path/installation-settings.markdown" "tag")"
-		installed_version="$(settings_value "$target_library_path/installation-settings.markdown" "version")"
+		installed_tag="$(settings_value "$target_package_path/installation-settings.markdown" "tag")"
+		installed_version="$(settings_value "$target_package_path/installation-settings.markdown" "version")"
 		if [[ -n "$requirement_tag" && "$installed_tag" == "$requirement_tag" ]]; then
 			__verbose "same install: tag %s matches for %s" "$requirement_tag" "$requirement_project"
 			return 0
@@ -364,7 +364,7 @@ function same_install() {
 }
 
 function record_library() {
-	if grep -q -- "^__${requirement_project}_library_path=" "$dynamic_partial"; then
+	if grep -q -- "^__${requirement_project}_package_path=" "$dynamic_partial"; then
 		return 0
 	fi
 
@@ -378,10 +378,10 @@ function record_library() {
 		printf '# version="%s"\n' "$requirement_branch" >> "$dynamic_partial"
 	fi
 
-	local rel="${target_library_path#"$installation_root"/}"
+	local rel="${target_package_path#"$installation_root"/}"
 	rel="${rel#"$installation_root"}"
 	rel="${rel#/}"
-	printf '__%s_library_path="$installation_root/%s"\n' "$requirement_project" "$(__normalize_path_slashes "$rel/")" >> "$dynamic_partial"
+	printf '__%s_package_path="$installation_root/%s"\n' "$requirement_project" "$(__normalize_path_slashes "$rel/")" >> "$dynamic_partial"
 	__verbose "recorded library path for %s" "$requirement_project"
 }
 
@@ -392,7 +392,7 @@ function record_pin() {
 
 	printf '# name=%s\n# _type=package\n' "$requirement_project" >> "$pinned_partial"
 	[[ "$entry_installation_root" != "$installation_root" ]] && printf '# installation_root=%s\n' "$entry_installation_root" >> "$pinned_partial"
-	[[ "$entry_installation_path" != "library" ]] && printf '# installation_path=%s\n' "$entry_installation_path" >> "$pinned_partial"
+	[[ "$entry_installation_path" != "user" ]] && printf '# installation_path=%s\n' "$entry_installation_path" >> "$pinned_partial"
 	[[ -n "$requirement_commit" ]] && printf '# commit=%s\n' "$requirement_commit" >> "$pinned_partial"
 	[[ -n "${requirement_sha256:-}" ]] && printf '# sha256=%s\n' "$requirement_sha256" >> "$pinned_partial"
 	printf '%s\n\n' "$requirement_download" >> "$pinned_partial"
@@ -606,13 +606,13 @@ function run_handlers() {
 }
 
 function enqueue_nested() {
-	local library_path="$1" depth="$2"
+	local package_path="$1" depth="$2"
 
 	local nested=""
-	if [[ -f "$library_path/$PINNED_FILE" ]] && ! $force_download_newer; then
-		nested="$library_path/$PINNED_FILE"
-	elif [[ -f "$library_path/$SOURCES_FILE" ]]; then
-		nested="$library_path/$SOURCES_FILE"
+	if [[ -f "$package_path/$PINNED_FILE" ]] && ! $force_download_newer; then
+		nested="$package_path/$PINNED_FILE"
+	elif [[ -f "$package_path/$SOURCES_FILE" ]]; then
+		nested="$package_path/$SOURCES_FILE"
 	fi
 
 	[[ -z "$nested" ]] && return 0
@@ -621,8 +621,8 @@ function enqueue_nested() {
 	nested="$(__normalize_path_slashes "$nested")"
 	nested="${nested%/}"
 
-	__verbose "enqueueing nested requirements from %s (depth %s)" "$library_path" "$depth"
-	queue+=("$nested"$'\t'"$depth"$'\t'"$(basename -- "$library_path")")
+	__verbose "enqueueing nested requirements from %s (depth %s)" "$package_path" "$depth"
+	queue+=("$nested"$'\t'"$depth"$'\t'"$(basename -- "$package_path")")
 }
 
 function process_requirement() {
@@ -690,7 +690,7 @@ function process_requirement() {
 		entry_installation_path="$(__trim_whitespaces "$entry_installation_path")"
 
 		[[ -z "$entry_installation_root" ]] && entry_installation_root="$installation_root"
-		[[ -z "$entry_installation_path" ]] && entry_installation_path="library"
+		[[ -z "$entry_installation_path" ]] && entry_installation_path="user"
 
 		entry_installation_root="${entry_installation_root%"/"}"
 		entry_installation_path="${entry_installation_path%"/"}"
@@ -808,14 +808,14 @@ function process_requirement() {
 		fi
 
 		if [[ -n "${installed_paths["$project"]-}" ]] && { ! $force_download_newer || $is_bootstrapped; }; then
-			target_library_path="${installed_paths["$project"]}"
-			target_library_path="$(__normalize_path_slashes "$target_library_path/")"
+			target_package_path="${installed_paths["$project"]}"
+			target_package_path="$(__normalize_path_slashes "$target_package_path/")"
 
-			if [[ -d "$target_library_path/" ]]; then
+			if [[ -d "$target_package_path/" ]]; then
 				if $is_bootstrapped && $force_download_newer; then
 					__info "bootstrapped package %s is managed by core update, skipping" "$project"
 				else
-					__info "already installed at %s, skipping %s" "$target_library_path" "$project"
+					__info "already installed at %s, skipping %s" "$target_package_path" "$project"
 				fi
 
 				record_pin
@@ -824,7 +824,7 @@ function process_requirement() {
 
 				local depth_next
 				depth_next="$((depth + 1))" || __expression_may_fail
-				enqueue_nested "$target_library_path" "$depth_next"
+				enqueue_nested "$target_package_path" "$depth_next"
 
 				continue
 			fi
@@ -837,29 +837,29 @@ function process_requirement() {
 		record_pin
 
 		if [[ -n "${installed_paths["$project"]-}" ]]; then
-			target_library_path="${installed_paths["$project"]}"
+			target_package_path="${installed_paths["$project"]}"
 		else
-			target_library_path="$entry_installation_root/$entry_installation_path/$project"
+			target_package_path="$entry_installation_root/$entry_installation_path/$project"
 		fi
-		target_library_path="$(__normalize_path_slashes "$target_library_path")"
+		target_package_path="$(__normalize_path_slashes "$target_package_path")"
 		installation_target=""
 		installation_zip=""
 		installation_complete=false
 
-		if [[ -L "$target_library_path" ]]; then
+		if [[ -L "$target_package_path" ]]; then
 			__info "already locally linked, skipping external install of %s" "$project"
 			record_library
 			seen["$project"]="installed"
 
 			local depth_next
 			depth_next="$((depth + 1))" || __expression_may_fail
-			enqueue_nested "$target_library_path" "$depth_next"
+			enqueue_nested "$target_package_path" "$depth_next"
 
 			continue
 		fi
 
-		if [[ -e "$target_library_path" && ! -d "$target_library_path" ]]; then
-			__error "install path exists and is not a directory: %s" "$target_library_path"
+		if [[ -e "$target_package_path" && ! -d "$target_package_path" ]]; then
+			__error "install path exists and is not a directory: %s" "$target_package_path"
 			local_exit_failsafe
 		fi
 
@@ -870,19 +870,19 @@ function process_requirement() {
 
 			local depth_next
 			depth_next="$((depth + 1))" || __expression_may_fail
-			enqueue_nested "$target_library_path" "$depth_next"
+			enqueue_nested "$target_package_path" "$depth_next"
 
 			continue
 		fi
 
-		if [[ -d "$target_library_path" ]]; then
+		if [[ -d "$target_package_path" ]]; then
 			__info "backing up previous install of %s" "$project"
-			backup_installation_directory "$target_library_path" "$project"
+			backup_installation_directory "$target_package_path" "$project"
 		fi
 
 		__info "installing %s from %s" "$project" "$requirement_download"
 
-		installation_target="$target_library_path"
+		installation_target="$target_package_path"
 		mkdir --parents -- "$(dirname -- "$installation_target")"
 
 		local zip_temporary
@@ -919,11 +919,11 @@ function process_requirement() {
 			__info "sha256 verified for %s" "$requirement_project"
 		fi
 
-		__info "extracting %s to %s" "$project" "$target_library_path"
-		if ! extract_zip "$zip_temporary" "$target_library_path"; then
+		__info "extracting %s to %s" "$project" "$target_package_path"
+		if ! extract_zip "$zip_temporary" "$target_package_path"; then
 			archive_zip "$zip_temporary" "${project}-failed"
 			installation_zip=""
-			[[ -e "$target_library_path" ]] && backup_installation_directory "$target_library_path" "$project"
+			[[ -e "$target_package_path" ]] && backup_installation_directory "$target_package_path" "$project"
 			installation_target=""
 			seen["$project"]="failed"
 
@@ -941,31 +941,31 @@ function process_requirement() {
 
 		archive_zip "$zip_temporary" "$stem"
 
-		write_installation_settings "$target_library_path"
+		write_installation_settings "$target_package_path"
 
 		handler="$handlers_directory/$project"
 
 		if [[ ! -f "$handler" && -n "${installed_paths["$project"]-}" ]]; then
 			handler="${installed_paths["$project"]}/$CONTROL_DIRECTORY/$project"
 		fi
-		if [[ ! -f "$handler" && -n "$target_library_path" ]]; then
-			handler="$target_library_path/$CONTROL_DIRECTORY/$project"
+		if [[ ! -f "$handler" && -n "$target_package_path" ]]; then
+			handler="$target_package_path/$CONTROL_DIRECTORY/$project"
 		fi
 		source_handler_once "$project" "$handler"
 		installation_complete=true
 		installation_target=""
 
-		__info "installed %s to %s" "$project" "$target_library_path"
+		__info "installed %s to %s" "$project" "$target_package_path"
 		record_library
 		seen["$project"]="installed"
 
 		if [[ -z "${installed_paths["$project"]-}" ]]; then
-			installed_paths["$project"]="$target_library_path"
+			installed_paths["$project"]="$target_package_path"
 		fi
 
 		local depth_next
 		depth_next="$((depth + 1))" || __expression_may_fail
-		enqueue_nested "$target_library_path" "$depth_next"
+		enqueue_nested "$target_package_path" "$depth_next"
 	done
 }
 
@@ -1069,8 +1069,8 @@ function install_package() {
 		local_exit_failsafe
 	fi
 
-	bootstrap_inject_package "https://github.com/freywald/sourcetree-datafile-format" "$installation_root/core-library"
-	__require_once "$__sourcetree_datafile_format_library_path/library/sourcetree-datafile-format"
+	bootstrap_inject_package "https://github.com/freywald/sourcetree-datafile-format" "$installation_root/core-packages"
+	__require_once "$__sourcetree_datafile_format_package_path/library/sourcetree-datafile-format"
 
 	input_file="$(__normalize_path_slashes "$installation_root/$SOURCES_FILE")"
 	pinned_file="$(__normalize_path_slashes "$installation_root/$PINNED_FILE")"
@@ -1102,9 +1102,9 @@ function install_package() {
 		source -- "$runtime_file"
 		local variable project
 		for variable in ${!__*}; do
-			[[ "$variable" != *"_library_path" ]] && continue
+			[[ "$variable" != *"_package_path" ]] && continue
 			project="${variable#"__"}"
-			project="${project%"_library_path"}"
+			project="${project%"_package_path"}"
 			installed_paths["$project"]="$(__normalize_path_slashes "${!variable%/}")"
 		done
 	fi
@@ -1112,9 +1112,9 @@ function install_package() {
 	if [[ -f "$dynamic_file" ]]; then
 		source -- "$dynamic_file"
 		for variable in ${!__*}; do
-			[[ "$variable" != *"_library_path" ]] && continue
+			[[ "$variable" != *"_package_path" ]] && continue
 			project="${variable#"__"}"
-			project="${project%"_library_path"}"
+			project="${project%"_package_path"}"
 			if [[ -z "${installed_paths["$project"]-}" ]]; then
 				installed_paths["$project"]="$(__normalize_path_slashes "${!variable%/}")"
 			fi
@@ -1208,7 +1208,7 @@ function install_package() {
 		if (( ${#updates[@]} > 0 )); then
 			if __confirm "Core-library updates are available. Update now?"; then
 				force_download_newer=true
-				__info "updating bootstrapped libraries"
+				__info "updating bootstrapped packages"
 			else
 				__info "continuing without update"
 			fi
@@ -1324,13 +1324,13 @@ function install_package() {
 		done
 
 		if (( ${#core_failures[@]} > 0 )); then
-			__error "core-library updates failed for: %s" "${core_failures[*]}"
+			__error "core-packages updates failed for: %s" "${core_failures[*]}"
 			local_exit_failsafe
 		fi
 	fi
 
 	if $rebooted; then
-		__info "bootstrapped libraries updated, reboot required"
+		__info "bootstrapped packages updated, reboot required"
 		force_download_newer=false
 		return "$EXIT_REBOOT"
 	fi
@@ -1443,11 +1443,11 @@ function install_package() {
 	if [[ -f "$runtime_file" ]]; then
 		local line project path settings commit version
 		while IFS= read -r line || [[ -n "$line" ]]; do
-			# Extract project name from __PROJECT_library_path=…
-			if [[ "$line" =~ ^__([A-Za-z0-9_]+)_library_path= ]]; then
+			# Extract project name from __PROJECT_package_path=…
+			if [[ "$line" =~ ^__([A-Za-z0-9_]+)_package_path= ]]; then
 				project="${BASH_REMATCH[1]}"
 				# Only append if this project is not already recorded
-				if ! grep -q -- "^__${project}_library_path=" "$dynamic_partial"; then
+				if ! grep -q -- "^__${project}_package_path=" "$dynamic_partial"; then
 					path="${installed_paths["$project"]-}"
 					settings=""
 					[[ -n "$path" && -d "$path" ]] && settings="$path/installation-settings.markdown"
@@ -1469,6 +1469,33 @@ function install_package() {
 		done < "$runtime_file"
 		rm -f -- "$runtime_file"
 	fi
+
+	# Ensure every bootstrapped package has a pin entry, even if it was never
+	# listed in a sources file (e.g. the meta-package).
+	local project path settings page commit download
+	for project in "${!installed_paths[@]}"; do
+		path="${installed_paths["$project"]}"
+		[[ ! -d "$path" ]] && continue
+		settings="$path/installation-settings.markdown"
+		[[ ! -f "$settings" ]] && continue
+		[[ "$(settings_value "$settings" "bootstrapped")" != "true" ]] && continue
+
+		# Skip if already recorded by the normal pin path
+		if grep -q -- "^# name=$project$" "$pinned_partial" 2>/dev/null; then
+			continue
+		fi
+
+		page="$(settings_value "$settings" "source url")"
+		download="$(settings_value "$settings" "download url")"
+		commit="$(settings_value "$settings" "commit")"
+		[[ -z "$download" && -n "$page" ]] && download="${page}/archive/refs/heads/master.zip"
+		[[ -z "$download" ]] && continue
+
+		printf '# name=%s\n# _type=package\n' "$project" >> "$pinned_partial"
+		[[ -n "$commit" ]] && printf '# commit=%s\n' "$commit" >> "$pinned_partial"
+		printf '%s\n\n' "$download" >> "$pinned_partial"
+		__verbose "recorded pin for bootstrapped package %s" "$project"
+	done
 
 	mv -f -- "$dynamic_partial" "$dynamic_file"
 	if [[ -s "$pinned_partial" ]]; then
