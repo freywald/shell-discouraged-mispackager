@@ -23,7 +23,9 @@ function local_exit_failsafe() { exit 1; }
 
 # preamble end
 
-readonly BOOTSTRAPPER_LOADED=true
+if ! declare -p BOOTSTRAPPER_LOADED &>"/dev/null"; then
+    readonly BOOTSTRAPPER_LOADED=true
+fi
 
 if ! declare -p installed_paths &>"/dev/null"; then
 	declare -A installed_paths=()
