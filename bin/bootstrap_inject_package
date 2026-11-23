@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # please do NOT modify this file
-# this script is 1:1 taken from shell-discouraged-mispackager
+# this script is taken from shell-discouraged-mispackager without modifications
 # and will be replaced on manual update at any time
 
 # preamble start
@@ -15,7 +15,7 @@ shopt -s expand_aliases
 readonly ARCHIVE_DOWNLOADS_DIRECTORY="archive/downloads"
 readonly ARCHIVE_INSTALLATIONS_DIRECTORY="archive/installations"
 readonly CONTROL_DIRECTORY="packages.control"
-readonly DYNAMIC_FILE="package-summary.dynamic"
+readonly DYNAMIC_FILE="package-paths.export"
 readonly SOURCES_FILE="packages.sources"
 readonly PINNED_FILE="packages.pinned.sources"
 
@@ -37,7 +37,7 @@ if ! declare -p registered_handlers &>"/dev/null"; then
 	declare -A registered_handlers=()
 fi
 
-function bootstrap_install() {
+function bootstrap_inject_package() {
 	local url="$1" destination="$2"
 	shift 2 ||:
 

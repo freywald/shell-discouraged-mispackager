@@ -2,9 +2,9 @@
 # _type=package
 https://github.com/freywald/ex10dead-common-library
 
-# name=desynchronizer
+# name=sourcetree_datafile_format
 # _type=package
-https://github.com/freywald/desynchronizer
+https://github.com/freywald/sourcetree-datafile-format
 
 # _type=requirement
 # apt=curl

@@ -14,7 +14,7 @@ The **shell-discouraged-mispackager** installer is a sophisticated Bash-based pa
 - **Requirements**: Checks for required system programs or apt packages before proceeding.
 - **Safe updates**: Backs up previous installations, supports forced reinstalls, and special handling for core/bootstrapped libraries (which may trigger a re-source "reboot").
 - **Post-install handlers**: Sources and runs handler scripts from `packages.control/<project>` after installation.
-- **Dynamic paths**: Produces a `package-summary.dynamic` file exporting library path variables.
+- **Dynamic paths**: Produces a `package-paths.export` file exporting library path variables.
 - **Conflict detection**: Detects version conflicts across the dependency tree.
 - **Cleanup**: Archives downloaded ZIPs and previous installations; removes orphaned packages on explicit updates.
 
@@ -71,7 +71,7 @@ The following options are recognized by `install_package`. They can be given in 
 |--------------------------------------|---------|
 | `packages.sources` | Declarative list of packages and requirements. |
 | `packages.pinned.sources` | Generated pin file for reproducible installs. |
-| `package-summary.dynamic` | Generated file exporting `__<project>_library_path` variables. |
+| `package-paths.export` | Generated file exporting `__<project>_library_path` variables. |
 | `bootstrapped.dynamic` | Temporary file recording paths of bootstrapped libraries. |
 | `FLAG_IS_MISPACKAGED` | Marker file required in the installation root. |
 | `archive/downloads/` | Archived ZIP files of installed packages. |
