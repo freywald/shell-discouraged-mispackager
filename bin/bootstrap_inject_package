@@ -69,12 +69,7 @@ function bootstrap_inject_package() {
 			fi
 		elif [[ "$1" == "--sha256="* ]]; then
 			sha256="${1#"--sha256="}"
-			if [[ -n "$sha256" ]]; then
-				shift ||:
-			else
-				__error "--sha256 requires a value"
-				local_exit_failsafe
-			fi
+			shift ||:
 		else
 			__error "unknown argument %s" "$1"
 			local_exit_failsafe
@@ -265,9 +260,9 @@ function __create_temporary_directory() {
 	mktemp --directory -- "${TMPDIR:-"/tmp/"}/${prefix}.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 }
 
-function __error() { printf "$@"; echo; exit 1; }
-function __info() { printf "[INFO] $@"; echo; }
-function __verbose() { printf "[VERBOSE] $@"; echo; }
+function __error() { printf -- "$@"; echo; exit 1; }
+function __info() { printf -- "[INFO] $@"; echo; }
+function __verbose() { printf -- "[VERBOSE] $@"; echo; }
 
 EXIT_OK=0
 EXIT_INTERRUPTED=130   # 128 + SIGINT
