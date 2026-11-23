@@ -74,7 +74,7 @@ Without an update flag the pin file is preferred. Core/bootstrapped packages are
 | `FLAG_IS_MISPACKAGED` | Required marker. |
 | `archive/downloads/`, `archive/installations/` | Archived ZIPs and previous/incomplete installs. |
 | `user/<project>/` | Default location for ordinary packages. |
-| `core-packages/` | Bootstrapped core packages. |
+| `core-package/` | Bootstrapped core packages. |
 | `<package>/packages.control/<name>` | Optional post-install handler. |
 | `<package>/installation-settings.markdown` | Per-package metadata. |
 

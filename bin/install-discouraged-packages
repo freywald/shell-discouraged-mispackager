@@ -1069,7 +1069,7 @@ function install_package() {
 		local_exit_failsafe
 	fi
 
-	bootstrap_inject_package "https://github.com/freywald/sourcetree-datafile-format" "$installation_root/core-packages"
+	bootstrap_inject_package "https://github.com/freywald/sourcetree-datafile-format" "$installation_root/core-package"
 	__require_once "$__sourcetree_datafile_format_package_path/library/sourcetree-datafile-format"
 
 	input_file="$(__normalize_path_slashes "$installation_root/$SOURCES_FILE")"
@@ -1324,7 +1324,7 @@ function install_package() {
 		done
 
 		if (( ${#core_failures[@]} > 0 )); then
-			__error "core-packages updates failed for: %s" "${core_failures[*]}"
+			__error "core-package updates failed for: %s" "${core_failures[*]}"
 			local_exit_failsafe
 		fi
 	fi
